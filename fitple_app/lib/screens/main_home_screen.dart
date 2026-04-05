@@ -28,7 +28,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           ),
         ),
       ),
-      const GatherScreen(),
+      const GatherScreen(), //gatherscreen이랑 연결
       Center(
         child: Text(
           '준비 중입니다',

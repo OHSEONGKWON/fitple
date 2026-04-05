@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'gather_edit_screen.dart';
 
 // 💡 1. 정렬 글씨가 바뀌어야 하므로 StatefulWidget으로 변경!
 class GatherScreen extends StatefulWidget {
@@ -58,7 +59,6 @@ class _GatherScreenState extends State<GatherScreen> {
                       ],
                     ),
                   ),
-                  // 💡 질문자님이 직접 수정하신 오른쪽 + 버튼 (완벽합니다!)
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
@@ -66,7 +66,16 @@ class _GatherScreenState extends State<GatherScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      onPressed: () {}, 
+                      onPressed: () {
+                      // 💡 + 버튼을 누르면 새 창이 아래에서 위로 스윽 올라옵니다.
+                        Navigator.push(
+                          context,
+                        MaterialPageRoute(
+                          builder: (context) => const GatherEditScreen(),
+                          fullscreenDialog: true, // true로 하면 아래에서 위로 올라오는 모달 창 느낌이 납니다!
+                          ),
+                        );
+                      },  
                       icon: const Icon(Icons.add_circle_outlined),
                       iconSize: 35, 
                       color: const Color(0xFF00E676).withValues(alpha: 0.7)
@@ -78,7 +87,7 @@ class _GatherScreenState extends State<GatherScreen> {
             const SizedBox(height: 35),
 
             // ==========================================
-            // 2. 실시간 모집 헤더 (🔥 끊어졌던 정렬 드롭다운 기능 복구!)
+            // 2. 실시간 모집 헤더 
             // ==========================================
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -128,7 +137,7 @@ class _GatherScreenState extends State<GatherScreen> {
                   ),
                 ),
               ],
-            ), // 👈 여기서 Row가 완벽하게 닫힙니다!
+            ),
             const SizedBox(height: 15),
 
             // ==========================================
