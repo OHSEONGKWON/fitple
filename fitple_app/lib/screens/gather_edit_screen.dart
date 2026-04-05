@@ -98,13 +98,15 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
       color: isDarkMode ? Colors.white70 : Colors.black87,
     );
 
-    return Scaffold(
+    return Scaffold( //여기부터 디자인
       appBar: AppBar(
-        title: const Text('새 크루 모집하기'),
+        title: const Text('새 크루 모집하기', style: TextStyle(
+          fontWeight: FontWeight(700),
+          )), //
         backgroundColor: isDarkMode ? const Color(0xFF121212) : Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.close), // 작성 취소 느낌을 주기 위해 X 버튼 사용
+          icon: const Icon(Icons.arrow_back), // 작성 취소 느낌을 주기 위해 X 버튼 사용
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -235,7 +237,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
               const SizedBox(height: 24),
 
               // ==============================
-              // 5. 모집 인원 (최소 ~ 최대) 🔥 오류 수정 완료!
+              // 5. 모집 인원 (최소 ~ 최대)
               // ==============================
               Text('모집 인원 (본인 제외)', style: labelStyle),
               const SizedBox(height: 8),
