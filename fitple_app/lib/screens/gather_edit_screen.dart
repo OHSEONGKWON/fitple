@@ -16,7 +16,6 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
   
   // 2. 선택 상태 변수들
   String _selectedCategory = '축구'; // 기본 선택 종목
-  int _capacity = 4; // 기본 모집 인원
   DateTimeRange? _selectedDateRange; // 모집 날짜 범위
 
   @override
@@ -160,6 +159,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
               const SizedBox(height: 8),
               TextField(
                 controller: _titleController,
+                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
                 decoration: InputDecoration(
                   hintText: '예: 평거동 야외무대에서 가볍게 뛰실 분!',
                   hintStyle: TextStyle(
@@ -183,6 +183,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
               TextField(
                 controller: _descriptionController,
                 maxLines: 5, // 본문이라 창을 크게 열어둠
+                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
                 decoration: InputDecoration(
                   hintText: '모임 장소, 실력, 준비물 등 상세한 내용을 적어주세요.',
                   hintStyle: TextStyle(
@@ -234,12 +235,9 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
               const SizedBox(height: 24),
 
               // ==============================
-              // 5. 모집 인원 (1명 ~ 99명 슬라이더)
+              // 5. 모집 인원 (최소 ~ 최대) 🔥 오류 수정 완료!
               // ==============================
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('모집 인원 (본인 제외)', style: labelStyle),
+              Text('모집 인원 (본인 제외)', style: labelStyle),
               const SizedBox(height: 8),
               Row(
                 children: [
