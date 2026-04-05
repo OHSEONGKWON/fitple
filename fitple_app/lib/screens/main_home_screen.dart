@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'profile_screen.dart';
 import 'home_screen.dart';
+import 'gather_screen.dart';
 
 class MainHomeScreen extends StatefulWidget {
   const MainHomeScreen({super.key});
@@ -27,6 +28,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           ),
         ),
       ),
+      const GatherScreen(),
       Center(
         child: Text(
           '준비 중입니다',
@@ -132,7 +134,12 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                   icon: Icon(Icons.home_filled),
                   label: '홈',
                 ),
-                BottomNavigationBarItem(icon: Icon(Icons.search), label: '탐색'),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.search),
+                  label: '탐색'),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.add_outlined),
+                  label: '모집'),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.chat_bubble_outline),
                   label: '커뮤니티',
