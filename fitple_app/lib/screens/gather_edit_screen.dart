@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-// 나중에 백엔드(Supabase 등) 연결 시 사용할 패키지를 대비해 둡니다.
 // import 'package:supabase_flutter/supabase_flutter.dart'; 
 
 class GatherEditScreen extends StatefulWidget {
@@ -106,7 +105,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
         backgroundColor: isDarkMode ? const Color(0xFF121212) : Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back), // 작성 취소 느낌을 주기 위해 X 버튼 사용
+          icon: const Icon(Icons.arrow_back), // 통일성을 위해 뒤로가기로 하였으나, x표시로 할지 의논을 요함
           onPressed: () => Navigator.pop(context),
         ),
       ),
