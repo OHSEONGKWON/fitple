@@ -9,11 +9,10 @@ class GatherScreen extends StatefulWidget {
 }
 
 class _GatherScreenState extends State<GatherScreen> {
-  // 현재 선택된 정렬 방식을 기억하는 변수
   String _currentSort = '최신순';
 
   @override
-  Widget build(BuildContext context) { //그냥 기본 설정을 저장하는 부분
+  Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDarkMode ? Colors.white : Colors.black;
     final subTextColor = isDarkMode ? Colors.white54 : Colors.black54;
@@ -22,21 +21,18 @@ class _GatherScreenState extends State<GatherScreen> {
     return SingleChildScrollView(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
-        child: Column( //페이지 전체의 틀을 column으로 잡음
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ==========================================
-            // 1. 새로운 크루 모집하기 배너
-            // ==========================================
-            Container(//새로운 크루 모집하기 상자 위젯
+            // 새로운 크루 모집하기
+            Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: cardColor, //미리 저장해둔 색
+                color: cardColor,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 children: [
-                  // 네온 그린 '아이콘(사람 두명 아이콘)' 박스
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -47,35 +43,33 @@ class _GatherScreenState extends State<GatherScreen> {
                     child: const Icon(Icons.people_alt_outlined, color: Color(0xFF00E676), size: 28),
                   ),
                   const SizedBox(width: 16),
-                  // 글씨 영역
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [ //모집 글귀
+                      children: [
                         Text('새로운 크루 모집하기', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
                         Text('함께 땀 흘릴 메이트를 찾아보세요', style: TextStyle(color: subTextColor, fontSize: 13)),
                       ],
                     ),
                   ),
-                  Container( //!! 중요 !! 모집글 버튼
+                  Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: cardColor,
                       shape: BoxShape.circle,
                     ),
-                    child: IconButton( //버튼 생성
+                    child: IconButton(
                       onPressed: () {
-                      //버튼을 누르면 새 창이 아래에서 위로 올라오도록 설정
                         Navigator.push(
                           context,
-                        MaterialPageRoute(
-                          builder: (context) => const GatherEditScreen(),
-                          fullscreenDialog: true, //아래에서 위로 올라오는 모달 창 느낌연출
+                          MaterialPageRoute(
+                            builder: (context) => const GatherEditScreen(),
+                            fullscreenDialog: true,
                           ),
                         );
                       },  
-                      icon: const Icon(Icons.add_circle_outlined), //버튼 아이콘 생김새 설정
+                      icon: const Icon(Icons.add_circle_outlined),
                       iconSize: 35, 
                       color: const Color(0xFF00E676).withValues(alpha: 0.7)
                     )
@@ -85,27 +79,24 @@ class _GatherScreenState extends State<GatherScreen> {
             ),
             const SizedBox(height: 35),
 
-            // ==========================================
-            // 2. 실시간 모집 헤더 
-            // ==========================================
+            // 실시간 모집바
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,//양 끝으로 정렬
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text('실시간 모집 ✨', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.bold)),
                 
-                // 정렬 드롭다운 메뉴 버튼
                 PopupMenuButton<String>(
                   color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  position: PopupMenuPosition.under, //밑으로 내려오도록 설정
+                  position: PopupMenuPosition.under,
                   
                   onSelected: (String newValue) {
                     setState(() {
-                      _currentSort = newValue; // 선택한 항목으로 화면 갱신
+                      _currentSort = newValue;
                     });
                   },
                   
-                  itemBuilder: (BuildContext context) { //박스를 여러개 만듦
+                  itemBuilder: (BuildContext context) {
                     return ['최신순', '오래된순', '인기순', 'A-Z 순'].map((String choice) {
                       return PopupMenuItem<String>(
                         value: choice,
@@ -120,7 +111,7 @@ class _GatherScreenState extends State<GatherScreen> {
                     }).toList();
                   },
                   
-                  child: Container( //기본 박스 생성
+                  child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: cardColor,
@@ -128,7 +119,7 @@ class _GatherScreenState extends State<GatherScreen> {
                     ),
                     child: Row(
                       children: [
-                        Text(_currentSort, style: TextStyle(color: subTextColor, fontSize: 13)), //저장된 문자열 출력
+                        Text(_currentSort, style: TextStyle(color: subTextColor, fontSize: 13)),
                         const SizedBox(width: 4),
                         Icon(Icons.keyboard_arrow_down, color: subTextColor, size: 16),
                       ],
@@ -139,17 +130,17 @@ class _GatherScreenState extends State<GatherScreen> {
             ),
             const SizedBox(height: 15),
 
-            // ==========================================
-            // 3. 모집 리스트 카드
-            // ==========================================
-            _buildRecruitmentCard(
+            // 모집 리스트 카드 (프론트 테스트용 임시 데이터)
+
+            RecruitmentCard(
               isDarkMode: isDarkMode,
               accentColor: Colors.redAccent,
               category: '러닝크루',
-              timeAgo: '10', //수정사항 : 문자열에서 f스트링으로
+              timeAgo: '10', 
               statusText: '👥 2/4',
               title: '오늘 저녁 남강 나이트 러닝!',
-              description: '평거동 야외무대에서 5km 정도 가볍게 뛸 초...',
+              description: '평거동 야외무대에서 5km 정도 가볍게 뛸 초보자 분들 구합니다. 부담 없이 오셔서 같이 땀 흘려요!',
+              gatherDate: '2026.04.10 ~ 2026.04.15', // 임시 모집 날짜 추가
               userName: '달리는호랑이',
               userScore: '98점',
               userBadge: '러닝 3년차',
@@ -162,34 +153,93 @@ class _GatherScreenState extends State<GatherScreen> {
       ),
     );
   }
+}
 
-  // 💡 [함수] 카드 디자인 공장
-  Widget _buildRecruitmentCard({ //여기부터 바로 위에 저장된 문자열(변수) 선언과 이 변수들을 이용한 모집글 디자인..
-    required bool isDarkMode, //다크모드 인가요?
-    required Color accentColor, //왼쪽 줄 색깔
-    required String category, //어느 종목인지
-    required String timeAgo, //몇분전인지
-    required String statusText, //현재원/총인원
-    required String title, //글제목
-    required String description, //글 성명(내용)
-    required String userName, //유저닉네임
-    required String userScore, //유저점수
-    required String userBadge, //유저 특징, 상태 표시
-    required IconData extraInfoIcon, //위치 아이콘
-    required String extraInfoText, //장소 지명
-  }) {
-    final cardColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.white; //상태에 따른 배경색
-    final textColor = isDarkMode ? Colors.white : Colors.black; //상태에 따른 텍스트 색
-    final subTextColor = isDarkMode ? Colors.white54 : Colors.black54;
-    //
-    //추후에 수정해야할 사항 다수 존재(컨테이너 클릭 여부, 위치아이콘 클릭, 프로필 아이콘->사진화)
-    //
+// 모집글 추가 사항 애니메이션 영역 기능 (저장 데이터 협의 필요)
+class RecruitmentCard extends StatefulWidget {
+  final bool isDarkMode;
+  final Color accentColor;
+  final String category;
+  final String timeAgo;
+  final String statusText;
+  final String title;
+  final String description;
+  final String gatherDate; // 모집 날짜
+  final String userName;
+  final String userScore;
+  final String userBadge;
+  final IconData extraInfoIcon;
+  final String extraInfoText;
+
+  const RecruitmentCard({
+    super.key,
+    required this.isDarkMode,
+    required this.accentColor,
+    required this.category,
+    required this.timeAgo,
+    required this.statusText,
+    required this.title,
+    required this.description,
+    required this.gatherDate,
+    required this.userName,
+    required this.userScore,
+    required this.userBadge,
+    required this.extraInfoIcon,
+    required this.extraInfoText,
+  });
+
+  @override
+  State<RecruitmentCard> createState() => _RecruitmentCardState();
+}
+
+class _RecruitmentCardState extends State<RecruitmentCard> with SingleTickerProviderStateMixin {
+  bool _isExpanded = false; 
+  
+  late AnimationController _expandController;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _expandController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _animation = CurvedAnimation(
+      parent: _expandController,
+      curve: Curves.fastOutSlowIn,
+    );
+  }
+
+  @override
+  void dispose() {
+    _expandController.dispose(); 
+    super.dispose();
+  }
+
+  void _toggleExpand() {
+    setState(() {
+      _isExpanded = !_isExpanded;
+      if (_isExpanded) {
+        _expandController.forward(); // 열기 애니메이션 재생
+      } else {
+        _expandController.reverse(); // 닫기 애니메이션 재생
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cardColor = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final textColor = widget.isDarkMode ? Colors.white : Colors.black;
+    final subTextColor = widget.isDarkMode ? Colors.white54 : Colors.black54;
+
     return Container(
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          if (!isDarkMode)
+          if (!widget.isDarkMode)
             BoxShadow(color: Colors.grey.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4)),
         ],
       ),
@@ -197,80 +247,121 @@ class _GatherScreenState extends State<GatherScreen> {
         borderRadius: BorderRadius.circular(20),
         child: Container(
           decoration: BoxDecoration(
-            border: Border(left: BorderSide(color: accentColor, width: 6)),
+            border: Border(left: BorderSide(color: widget.accentColor, width: 6)),
           ),
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.only(top: 20, left: 20, right: 20, bottom: 5), 
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // 1. 카테고리 및 시간
               Row(
                 children: [
-                  Container( //종목을 담는 상자(왼쪽 줄이랑 같은 색으로 채워짐) : 예시의 경우 러닝크루
+                  Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: accentColor.withValues(alpha: 0.15),
+                      color: widget.accentColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+                      border: Border.all(color: widget.accentColor.withValues(alpha: 0.3)),
                     ),
-                    child: Text(category, style: TextStyle(color: accentColor, fontSize: 12, fontWeight: FontWeight.bold)),
-                  ), //여기까지
+                    child: Text(widget.category, style: TextStyle(color: widget.accentColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
                   const SizedBox(width: 10),
-                  Text('$timeAgo분 전', style: TextStyle(color: subTextColor, fontSize: 12)), //몇분전인지 f스트링으로 문자열만 받기(나중엔 int형으로 받기)
+                  Text('${widget.timeAgo}분 전', style: TextStyle(color: subTextColor, fontSize: 12)),
                   const Spacer(),
-                  Text(statusText, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.bold)), //얘도 나중에 수정하기(문자열 > 현재모집인수/최대모집인수)
-                ],//여기까지 젤 윗줄
+                  Text(widget.statusText, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.bold)),
+                ],
               ),
-              const SizedBox(height: 16), 
-              Text(title, style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)), //제목(굵게!!)
-              const SizedBox(height: 6),
-              Text(
-                description, //설명글란
-                style: TextStyle(color: subTextColor, fontSize: 14),
-                maxLines: 1, 
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 20),
-              Row( //젤 밑부분 시작
+              const SizedBox(height: 16),
+              
+              // 2. 제목
+              Text(widget.title, style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 16),
+
+              // 3. 유저 정보 및 위치
+              Row(
                 children: [
-                  CircleAvatar( //프로필을 나타냄
+                  CircleAvatar(
                     radius: 16,
-                    backgroundColor: isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[300],
-                    child: Icon(Icons.person, color: subTextColor, size: 20), //아이콘에서 나중엔 클릭가능한 이미지로
+                    backgroundColor: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[300],
+                    child: Icon(Icons.person, color: subTextColor, size: 20),
                   ),
                   const SizedBox(width: 10),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(userName, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)), //유저이름
+                      Text(widget.userName, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
                       Row(
-                        children: [ //유저점수, 특징을 담는 Row
+                        children: [
                           const Icon(Icons.thermostat, color: Color(0xFF00E676), size: 12),
-                          Text(userScore, style: TextStyle(color: const Color(0xFF00E676), fontSize: 11)),
+                          Text(widget.userScore, style: TextStyle(color: const Color(0xFF00E676), fontSize: 11)),
                           const SizedBox(width: 6),
-                          Text(userBadge, style: TextStyle(color: Colors.orangeAccent, fontSize: 11)),
+                          Text(widget.userBadge, style: TextStyle(color: Colors.orangeAccent, fontSize: 11)),
                         ],
                       ),
                     ],
                   ),
                   const Spacer(),
                   ElevatedButton.icon(
-                  onPressed: () {},
-                  icon: Icon(Icons.location_on_outlined, color: textColor),
-                  label: Text(extraInfoText, style: TextStyle(color: textColor)),
-                  style: ElevatedButton.styleFrom( //버튼 스타일
-                    backgroundColor: cardColor,
-                    elevation: 0,           // 1. 기본 그림자 제거
-                    shadowColor: Colors.transparent, // 2. 그림자 색상을 투명하게 (확실하게 제거)
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10), // 버튼 안쪽 여백
-                  ).copyWith(
-                    // 3. 클릭 시 물결 효과(Splash)와 마우스 오버 효과 모두 제거
-                    overlayColor: WidgetStateProperty.all(Colors.transparent),
-                    // 4. 그림자가 퍼지는 효과(SurfaceTintColor)도 투명하게
-                    surfaceTintColor: WidgetStateProperty.all(Colors.transparent), //나중에 싹다 이런식으로 바꿔야 할듯(완전히 상호작용 표시 없는 버튼 완성)
-                  ),
-                )
+                    onPressed: () {},
+                    icon: Icon(widget.extraInfoIcon, color: textColor),
+                    label: Text(widget.extraInfoText, style: TextStyle(color: textColor)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: cardColor,
+                      elevation: 0,
+                      shadowColor: Colors.transparent,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ).copyWith(
+                      overlayColor: WidgetStateProperty.all(Colors.transparent),
+                      surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
+                    ),
+                  )
                 ],
+              ),
+              
+              // 💡 4. 상세정보 영역 (정보 및 애니메이션 적용)
+              SizeTransition(
+                sizeFactor: _animation,
+                axisAlignment: -1.0, // 위치 고정
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 16),
+                    Divider(color: widget.isDarkMode ? Colors.white12 : Colors.black12),
+                    const SizedBox(height: 12),
+                    
+                    // 모집 날짜 정보
+                    Row(
+                      children: [
+                        Icon(Icons.calendar_today_outlined, color: subTextColor, size: 16),
+                        const SizedBox(width: 8),
+                        Text('모집 기간: ', style: TextStyle(color: subTextColor, fontSize: 13, fontWeight: FontWeight.bold)),
+                        Text(widget.gatherDate, style: TextStyle(color: textColor, fontSize: 13)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    
+                    // 본문 내용
+                    Text(
+                      widget.description,
+                      style: TextStyle(color: textColor, fontSize: 14, height: 1.5),
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+
+              // 💡 5. 펼치기/접기 화살표 버튼
+              Center(
+                child: IconButton(
+                  onPressed: _toggleExpand,
+                  icon: Icon(
+                    _isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, 
+                    color: subTextColor
+                  ),
+                  splashColor: Colors.transparent, 
+                  highlightColor: Colors.transparent,
+                ),
               ),
             ],
           ),
