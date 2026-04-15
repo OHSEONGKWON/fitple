@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'gather_edit_screen.dart';
+import 'chat_room_screen.dart';
 
 class GatherScreen extends StatefulWidget {
   const GatherScreen({super.key});
@@ -10,6 +12,123 @@ class GatherScreen extends StatefulWidget {
 
 class _GatherScreenState extends State<GatherScreen> {
   String _currentSort = '최신순';
+  List<Map<String, dynamic>> _gatherings = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGatherings();
+  }
+
+  Future<void> _loadGatherings() async {
+    setState(() => _isLoading = true);
+    try {
+      final String orderColumn;
+      final bool ascending;
+      switch (_currentSort) {
+        case '인기순':
+          orderColumn = 'current_members';
+          ascending = false;
+          break;
+        case '오래된순':
+          orderColumn = 'created_at';
+          ascending = true;
+          break;
+        case 'A-Z 순':
+          orderColumn = 'title';
+          ascending = true;
+          break;
+        default:
+          orderColumn = 'created_at';
+          ascending = false;
+      }
+      final data = await Supabase.instance.client
+          .from('gatherings')
+          .select()
+          .order(orderColumn, ascending: ascending);
+      if (mounted) {
+        setState(() {
+          _gatherings = List<Map<String, dynamic>>.from(data);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('불러오기 실패: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteGathering(String id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('모집글 삭제'),
+        content: const Text('이 모집글을 삭제할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('삭제', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await Supabase.instance.client.from('gatherings').delete().eq('id', id);
+      _loadGatherings();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('삭제 실패: $e')),
+        );
+      }
+    }
+  }
+
+  String _formatTimeAgo(String createdAt) {
+    final created = DateTime.parse(createdAt).toLocal();
+    final diff = DateTime.now().difference(created);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
+    if (diff.inHours < 24) return '${diff.inHours}시간 전';
+    return '${diff.inDays}일 전';
+  }
+
+  String _formatDateRange(String start, String end) {
+    final s = DateTime.parse(start);
+    final e = DateTime.parse(end);
+    return '${s.year}.${s.month.toString().padLeft(2, '0')}.${s.day.toString().padLeft(2, '0')} '
+        '~ ${e.year}.${e.month.toString().padLeft(2, '0')}.${e.day.toString().padLeft(2, '0')}';
+  }
+
+  Color _categoryColor(String category) {
+    switch (category) {
+      case '러닝': return Colors.redAccent;
+      case '축구': return Colors.green;
+      case '족구': return Colors.orange;
+      case '배구': return Colors.blue;
+      case '배드민턴': return Colors.purple;
+      case '헬스': return Colors.teal;
+      default: return Colors.blueGrey;
+    }
+  }
+
+  String _displayLocation(dynamic rawLocation) {
+    final location = (rawLocation ?? '').toString().trim();
+    final isPostalCode = RegExp(r'^\d{5}$').hasMatch(location);
+    if (location.isEmpty || isPostalCode) {
+      return '지역 비공개';
+    }
+    return location;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,14 +179,15 @@ class _GatherScreenState extends State<GatherScreen> {
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      onPressed: () {
-                        Navigator.push(
+                      onPressed: () async {
+                        final result = await Navigator.push<bool>(
                           context,
                           MaterialPageRoute(
                             builder: (context) => const GatherEditScreen(),
                             fullscreenDialog: true,
                           ),
                         );
+                        if (result == true) _loadGatherings();
                       },  
                       icon: const Icon(Icons.add_circle_outlined),
                       iconSize: 35, 
@@ -94,6 +214,7 @@ class _GatherScreenState extends State<GatherScreen> {
                     setState(() {
                       _currentSort = newValue;
                     });
+                    _loadGatherings();
                   },
                   
                   itemBuilder: (BuildContext context) {
@@ -130,24 +251,55 @@ class _GatherScreenState extends State<GatherScreen> {
             ),
             const SizedBox(height: 15),
 
-            // 모집 리스트 카드 (프론트 테스트용 임시 데이터)
-
-            RecruitmentCard(
-              isDarkMode: isDarkMode,
-              accentColor: Colors.redAccent,
-              category: '러닝크루',
-              timeAgo: '10', 
-              statusText: '👥 2/4',
-              title: '오늘 저녁 남강 나이트 러닝!',
-              description: '평거동 야외무대에서 5km 정도 가볍게 뛸 초보자 분들 구합니다. 부담 없이 오셔서 같이 땀 흘려요!',
-              gatherDate: '2026.04.10 ~ 2026.04.15', // 임시 모집 날짜 추가
-              userName: '달리는호랑이',
-              userScore: '98점',
-              userBadge: '러닝 3년차',
-              extraInfoIcon: Icons.location_on_outlined,
-              extraInfoText: '평거동',
-            ),
-            const SizedBox(height: 100), 
+            // 모집 리스트 카드 (Supabase 연동)
+            if (_isLoading)
+              const Center(child: CircularProgressIndicator(color: Color(0xFF00E676)))
+            else if (_gatherings.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 40),
+                  child: Text(
+                    '아직 모집글이 없어요.\n첫 번째로 크루를 모집해보세요! 🏃',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: subTextColor, fontSize: 15, height: 1.6),
+                  ),
+                ),
+              )
+            else
+              ..._gatherings.map((g) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: RecruitmentCard(
+                  isDarkMode: isDarkMode,
+                  accentColor: _categoryColor(g['category'] ?? '기타'),
+                  category: g['category'] ?? '기타',
+                  timeAgo: _formatTimeAgo(g['created_at'] ?? DateTime.now().toIso8601String()),
+                  statusText: '👥 ${g['current_members']}/${g['max_members']}',
+                  title: g['title'] ?? '',
+                  description: g['description'] ?? '',
+                  gatherDate: _formatDateRange(g['gather_start'], g['gather_end']),
+                  userName: g['user_nickname'] ?? '알 수 없음',
+                  userScore: '',
+                  userBadge: '',
+                  extraInfoIcon: Icons.location_on_outlined,
+                  extraInfoText: _displayLocation(g['location']),
+                  gatheringId: g['id'],
+                  authorId: g['user_id'],
+                                    hostNickname: g['user_nickname'] ?? '익명',
+                                    gatheringTitle: g['title'] ?? '',
+                  onEdit: () async {
+                    final result = await Navigator.push<bool>(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => GatherEditScreen(initialData: g),
+                        fullscreenDialog: true,
+                      ),
+                    );
+                    if (result == true) _loadGatherings();
+                  },
+                  onDelete: () => _deleteGathering(g['id']),
+                ),
+              )),
+            const SizedBox(height: 100),
           ],
         ),
       ),
@@ -164,12 +316,18 @@ class RecruitmentCard extends StatefulWidget {
   final String statusText;
   final String title;
   final String description;
-  final String gatherDate; // 모집 날짜
+  final String gatherDate;
   final String userName;
   final String userScore;
   final String userBadge;
   final IconData extraInfoIcon;
   final String extraInfoText;
+  final String gatheringId;
+  final String authorId;
+    final String hostNickname;
+    final String gatheringTitle;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
 
   const RecruitmentCard({
     super.key,
@@ -186,6 +344,12 @@ class RecruitmentCard extends StatefulWidget {
     required this.userBadge,
     required this.extraInfoIcon,
     required this.extraInfoText,
+    required this.gatheringId,
+    required this.authorId,
+      required this.hostNickname,
+      required this.gatheringTitle,
+    this.onEdit,
+    this.onDelete,
   });
 
   @override
@@ -266,9 +430,42 @@ class _RecruitmentCardState extends State<RecruitmentCard> with SingleTickerProv
                     child: Text(widget.category, style: TextStyle(color: widget.accentColor, fontSize: 12, fontWeight: FontWeight.bold)),
                   ),
                   const SizedBox(width: 10),
-                  Text('${widget.timeAgo}분 전', style: TextStyle(color: subTextColor, fontSize: 12)),
+                  Text(widget.timeAgo, style: TextStyle(color: subTextColor, fontSize: 12)),
                   const Spacer(),
                   Text(widget.statusText, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.bold)),
+                  // 작성자 본인에게만 수정/삭제 메뉴 표시
+                  if (Supabase.instance.client.auth.currentUser?.id == widget.authorId)
+                    PopupMenuButton<String>(
+                      icon: Icon(Icons.more_vert, color: subTextColor, size: 18),
+                      color: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      onSelected: (value) {
+                        if (value == 'edit') widget.onEdit?.call();
+                        if (value == 'delete') widget.onDelete?.call();
+                      },
+                      itemBuilder: (ctx) => [
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_outlined, size: 18, color: widget.isDarkMode ? Colors.white70 : Colors.black87),
+                              const SizedBox(width: 8),
+                              const Text('수정'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                              const SizedBox(width: 8),
+                              const Text('삭제', style: TextStyle(color: Colors.red)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
               const SizedBox(height: 16),
@@ -347,6 +544,75 @@ class _RecruitmentCardState extends State<RecruitmentCard> with SingleTickerProv
                       style: TextStyle(color: textColor, fontSize: 14, height: 1.5),
                     ),
                     const SizedBox(height: 10),
+                                      // 채팅하기 버튼 (비작성자에게만 표시)
+                                      if (Supabase.instance.client.auth.currentUser?.id != widget.authorId)
+                                        Padding(
+                                          padding: const EdgeInsets.only(bottom: 12),
+                                          child: SizedBox(
+                                            width: double.infinity,
+                                            child: ElevatedButton.icon(
+                                              onPressed: () async {
+                                                final currentUser = Supabase.instance.client.auth.currentUser;
+                                                if (currentUser == null) return;
+                                                try {
+                                                  // 기존 채팅방 조회
+                                                  final existing = await Supabase.instance.client
+                                                      .from('chat_rooms')
+                                                      .select()
+                                                      .eq('gathering_id', widget.gatheringId)
+                                                      .eq('guest_id', currentUser.id)
+                                                      .maybeSingle();
+
+                                                  String roomId;
+                                                  if (existing != null) {
+                                                    roomId = existing['id'];
+                                                  } else {
+                                                    final created = await Supabase.instance.client
+                                                        .from('chat_rooms')
+                                                        .insert({
+                                                          'gathering_id': widget.gatheringId,
+                                                          'gathering_title': widget.gatheringTitle,
+                                                          'host_id': widget.authorId,
+                                                          'host_nickname': widget.hostNickname,
+                                                          'guest_id': currentUser.id,
+                                                          'guest_nickname': currentUser.userMetadata?['display_name'] ?? currentUser.email ?? '익명',
+                                                        })
+                                                        .select()
+                                                        .single();
+                                                    roomId = created['id'];
+                                                  }
+                                                  if (!context.mounted) return;
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (context) => ChatRoomScreen(
+                                                        roomId: roomId,
+                                                        otherUserNickname: widget.hostNickname,
+                                                        gatheringTitle: widget.gatheringTitle,
+                                                      ),
+                                                    ),
+                                                  );
+                                                } catch (e) {
+                                                  if (context.mounted) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      SnackBar(content: Text('채팅 시작 실패: $e')),
+                                                    );
+                                                  }
+                                                }
+                                              },
+                                              icon: const Icon(Icons.chat_bubble_outline, size: 18, color: Colors.black),
+                                              label: const Text('채팅하기', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: const Color(0xFF00E676),
+                                                elevation: 0,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
                   ],
                 ),
               ),

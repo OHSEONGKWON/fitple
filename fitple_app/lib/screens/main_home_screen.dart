@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'profile_screen.dart';
 import 'home_screen.dart';
 import 'gather_screen.dart';
+import 'chat_list_screen.dart';
 
 class MainHomeScreen extends StatefulWidget {
   const MainHomeScreen({super.key});
@@ -29,15 +30,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         ),
       ),
       const GatherScreen(), //gatherscreen이랑 연결
-      Center(
-        child: Text(
-          '준비 중입니다',
-          style: TextStyle(
-            color: isDarkMode ? Colors.white70 : Colors.black87,
-            fontSize: 18,
-          ),
-        ),
-      ),
+      const ChatListScreen(),
       const ProfileScreen(),
     ];
 
@@ -76,7 +69,12 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         ),
         actions: [
           IconButton(
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ChatListScreen()),
+              );
+            },
             icon: Icon(
               Icons.chat_bubble_outline,
               color: isDarkMode ? Colors.white : Colors.black,

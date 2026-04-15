@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-// import 'package:supabase_flutter/supabase_flutter.dart'; 
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class GatherEditScreen extends StatefulWidget {
-  const GatherEditScreen({super.key});
+  final Map<String, dynamic>? initialData;
+  const GatherEditScreen({super.key, this.initialData});
 
   @override
   State<GatherEditScreen> createState() => _GatherEditScreenState();
@@ -12,7 +13,10 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
   // 1. 입력 필드 컨트롤러
   late TextEditingController _titleController;
   late TextEditingController _descriptionController;
-  
+  late TextEditingController _locationController;
+  late TextEditingController _minMembersController;
+  late TextEditingController _maxMembersController;
+
   // 2. 선택 상태 변수들
   String _selectedCategory = '축구'; // 기본 선택 종목
   DateTimeRange? _selectedDateRange; // 모집 날짜 범위
@@ -20,14 +24,28 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController();
-    _descriptionController = TextEditingController();
+    final d = widget.initialData;
+    _titleController = TextEditingController(text: d?['title'] ?? '');
+    _descriptionController = TextEditingController(text: d?['description'] ?? '');
+    _locationController = TextEditingController(text: d?['location'] ?? '');
+    _minMembersController = TextEditingController(text: d?['min_members']?.toString() ?? '');
+    _maxMembersController = TextEditingController(text: d?['max_members']?.toString() ?? '');
+    _selectedCategory = d?['category'] ?? '축구';
+    if (d != null && d['gather_start'] != null && d['gather_end'] != null) {
+      _selectedDateRange = DateTimeRange(
+        start: DateTime.parse(d['gather_start']),
+        end: DateTime.parse(d['gather_end']),
+      );
+    }
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _locationController.dispose();
+    _minMembersController.dispose();
+    _maxMembersController.dispose();
     super.dispose();
   }
 
@@ -80,12 +98,75 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
     // 백엔드(Supabase) DB 저장 로직
     // =========================================================
 
-    // 2. 테스트용: 저장이 완료되었다고 가정하고 이전 화면으로 돌아가기
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('새로운 모집글이 등록되었습니다! 🎉')),
-    );
-    Navigator.pop(context, true); // true를 넘겨서 성공적으로 글이 써졌음을 이전 화면에 알림
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로그인이 필요합니다.')),
+      );
+      return;
+    }
+
+    final minMembers = int.tryParse(_minMembersController.text.trim()) ?? 1;
+    final maxMembers = int.tryParse(_maxMembersController.text.trim());
+    final location = _locationController.text.trim();
+    if (maxMembers == null || maxMembers < minMembers) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('모집 인원을 올바르게 입력해주세요.')),
+      );
+      return;
+    }
+
+    if (RegExp(r'^\d{5}$').hasMatch(location)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('우편번호 대신 동네/장소명을 입력해주세요.')),
+      );
+      return;
+    }
+
+    final isEdit = widget.initialData != null;
+    try {
+      if (isEdit) {
+        await Supabase.instance.client
+            .from('gatherings')
+            .update({
+              'title': _titleController.text.trim(),
+              'description': _descriptionController.text.trim(),
+              'category': _selectedCategory,
+              'location': location,
+              'gather_start': _selectedDateRange!.start.toIso8601String().split('T')[0],
+              'gather_end': _selectedDateRange!.end.toIso8601String().split('T')[0],
+              'min_members': minMembers,
+              'max_members': maxMembers,
+            })
+            .eq('id', widget.initialData!['id']);
+      } else {
+        await Supabase.instance.client.from('gatherings').insert({
+          'user_id': user.id,
+          'user_nickname': user.userMetadata?['display_name'] ?? user.email ?? '익명',
+          'title': _titleController.text.trim(),
+          'description': _descriptionController.text.trim(),
+          'category': _selectedCategory,
+          'location': location,
+          'gather_start': _selectedDateRange!.start.toIso8601String().split('T')[0],
+          'gather_end': _selectedDateRange!.end.toIso8601String().split('T')[0],
+          'min_members': minMembers,
+          'max_members': maxMembers,
+          'current_members': 1,
+        });
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isEdit ? '모집글이 수정되었습니다! ✏️' : '새로운 모집글이 등록되었습니다! 🎉')),
+      );
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isEdit ? '수정 실패: $e' : '등록 실패: $e')),
+      );
+    }
   }
 
   @override
@@ -99,9 +180,10 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
 
     return Scaffold( //여기부터 디자인
       appBar: AppBar(
-        title: const Text('새 크루 모집하기', style: TextStyle(
-          fontWeight: FontWeight(700),
-          )), //
+        title: Text(
+          widget.initialData != null ? '모집글 수정하기' : '새 크루 모집하기',
+          style: const TextStyle(fontWeight: FontWeight(700)),
+        ),
         backgroundColor: isDarkMode ? const Color(0xFF121212) : Colors.white,
         elevation: 0,
         leading: IconButton(
@@ -255,6 +337,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
                         fillColor: isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[100],
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       ),
+                      controller: _minMembersController,
                     ),
                   ),
                   
@@ -277,6 +360,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
                         fillColor: isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[100],
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       ),
+                      controller: _maxMembersController,
                     ),
                   ),
                   
@@ -285,10 +369,33 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
                   Text('명', style: TextStyle(fontSize: 16, color: isDarkMode ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold)),
                 ],
               ),
+              const SizedBox(height: 24),
+
+              // ==============================
+              // 6. 장소
+              // ==============================
+              Text('장소', style: labelStyle),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _locationController,
+                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+                decoration: InputDecoration(
+                  hintText: '예: 평거동 야외무대',
+                  hintStyle: TextStyle(
+                    color: isDarkMode ? Colors.white30 : Colors.black26,
+                  ),
+                  filled: true,
+                  fillColor: isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[100],
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
               const SizedBox(height: 40),
 
               // ==============================
-              // 6. 저장 & 취소 버튼
+              // 7. 저장 & 취소 버튼
               // ==============================
               SizedBox(
                 height: 52,
