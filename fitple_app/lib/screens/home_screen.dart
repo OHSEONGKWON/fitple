@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:image_picker/image_picker.dart';
 import 'chat_list_screen.dart';
 import 'gather_edit_screen.dart';
 import 'gather_screen.dart';
@@ -74,6 +75,55 @@ class _HomeScreenState extends State<HomeScreen> {
     return '${diff.inDays}일 전';
   }
 
+  Future<void> _uploadStory(ImageSource source) async {
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(source: source, imageQuality: 80);
+
+      if (pickedFile == null) return;
+
+      final fileBytes = await pickedFile.readAsBytes();
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      // 스토리 파일이름: stories/{userId}/{timestamp}.jpg
+      final fileName = 'stories/${user.id}/${DateTime.now().millisecondsSinceEpoch}.jpg';
+
+      // 파일 업로드
+      await Supabase.instance.client.storage
+          .from('stories')
+          .uploadBinary(fileName, fileBytes,
+              fileOptions: const FileOptions(cacheControl: '3600', upsert: false));
+
+      // 데이터베이스에 스토리 기록 저장
+      await Supabase.instance.client.from('stories').insert({
+        'user_id': user.id,
+        'image_url': fileName,
+        'created_at': DateTime.now().toIso8601String(),
+        'expires_at': DateTime.now().add(const Duration(hours: 24)).toIso8601String(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('스토리가 업로드되었습니다! 🎉'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Color(0xFF00E676),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('업로드 실패: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
@@ -89,44 +139,130 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 인사 배너
-            Container(
-              margin: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              padding: const EdgeInsets.fromLTRB(22, 22, 16, 22),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF00E676), Color(0xFF00BFA5)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Row(
+            // 스토리 업로드 섹션
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _nickname.isEmpty
-                              ? '안녕하세요! 👋'
-                              : '안녕하세요, $_nickname님! 👋',
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          '오늘도 함께 땀 흘릴 메이트를\n찾아볼까요?',
-                          style: TextStyle(
-                              fontSize: 13, color: Colors.black87, height: 1.4),
-                        ),
-                      ],
+                  Text(
+                    _nickname.isEmpty ? '스토리' : '$_nickname의 스토리',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: isDarkMode ? Colors.white : Colors.black,
                     ),
                   ),
-                  const Text('🏃', style: TextStyle(fontSize: 52)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      // 계속 보기 버튼 (향후 업로드된 스토리 보여주기)
+                      Container(
+                        width: 72,
+                        height: 100,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFF00E676),
+                            width: 2,
+                          ),
+                          color: isDarkMode
+                              ? Colors.grey[800]
+                              : Colors.grey[100],
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('👤', style: TextStyle(fontSize: 32)),
+                            const SizedBox(height: 4),
+                            Text(
+                              '내 스토리',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: isDarkMode
+                                    ? Colors.white70
+                                    : Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // 카메라로 촬영 버튼
+                      GestureDetector(
+                        onTap: () => _uploadStory(ImageSource.camera),
+                        child: Container(
+                          width: 72,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF00E676), Color(0xFF00BFA5)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF00E676).withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text('📷', style: TextStyle(fontSize: 32)),
+                              const SizedBox(height: 4),
+                              Text(
+                                '촬영',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // 갤러리에서 선택 버튼
+                      GestureDetector(
+                        onTap: () => _uploadStory(ImageSource.gallery),
+                        child: Container(
+                          width: 72,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: isDarkMode
+                                ? Colors.grey[700]
+                                : Colors.grey[200],
+                            border: Border.all(
+                              color: const Color(0xFF00E676),
+                              width: 1.5,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Text('🖼️', style: TextStyle(fontSize: 32)),
+                              const SizedBox(height: 4),
+                              Text(
+                                '갤러리',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: isDarkMode
+                                      ? Colors.white70
+                                      : Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
