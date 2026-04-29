@@ -12,13 +12,24 @@ class GatherScreen extends StatefulWidget {
 
 class _GatherScreenState extends State<GatherScreen> {
   String _currentSort = '최신순';
+  String _searchQuery = '';
+  String _selectedCategory = '전체';
   List<Map<String, dynamic>> _gatherings = [];
   bool _isLoading = true;
+  final TextEditingController _searchController = TextEditingController();
+
+  static const _categories = ['전체', '러닝', '축구', '족구', '배구', '배드민턴', '헬스'];
 
   @override
   void initState() {
     super.initState();
     _loadGatherings();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadGatherings() async {
@@ -94,6 +105,22 @@ class _GatherScreenState extends State<GatherScreen> {
     }
   }
 
+  Future<void> _toggleClosed(String id, bool isClosed) async {
+    try {
+      await Supabase.instance.client
+          .from('gatherings')
+          .update({'is_closed': !isClosed})
+          .eq('id', id);
+      _loadGatherings();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('상태 변경 실패: $e')),
+        );
+      }
+    }
+  }
+
   String _formatTimeAgo(String createdAt) {
     final created = DateTime.parse(createdAt).toLocal();
     final diff = DateTime.now().difference(created);
@@ -123,8 +150,7 @@ class _GatherScreenState extends State<GatherScreen> {
 
   String _displayLocation(dynamic rawLocation) {
     final location = (rawLocation ?? '').toString().trim();
-    final isPostalCode = RegExp(r'^\d{5}$').hasMatch(location);
-    if (location.isEmpty || isPostalCode) {
+    if (location.isEmpty || RegExp(r'^\d{5}$').hasMatch(location)) {
       return '지역 비공개';
     }
     return location;
@@ -136,6 +162,15 @@ class _GatherScreenState extends State<GatherScreen> {
     final textColor = isDarkMode ? Colors.white : Colors.black;
     final subTextColor = isDarkMode ? Colors.white54 : Colors.black54;
     final cardColor = isDarkMode ? const Color(0xFF1E1E1E) : Colors.grey[100];
+
+    final filtered = _gatherings.where((g) {
+      final matchCat = _selectedCategory == '전체' || g['category'] == _selectedCategory;
+      final q = _searchQuery.toLowerCase();
+      final matchSearch = q.isEmpty ||
+          (g['title'] ?? '').toLowerCase().contains(q) ||
+          (g['description'] ?? '').toLowerCase().contains(q);
+      return matchCat && matchSearch;
+    }).toList();
 
     return SingleChildScrollView(
       child: Padding(
@@ -166,72 +201,126 @@ class _GatherScreenState extends State<GatherScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('새로운 크루 모집하기', style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text('새로운 크루 모집하기',
+                            style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 4),
-                        Text('함께 땀 흘릴 메이트를 찾아보세요', style: TextStyle(color: subTextColor, fontSize: 13)),
+                        Text('함께 땀 흘릴 메이트를 찾아보세요',
+                            style: TextStyle(color: subTextColor, fontSize: 13)),
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: cardColor,
-                      shape: BoxShape.circle,
-                    ),
-                    child: IconButton(
-                      onPressed: () async {
-                        final result = await Navigator.push<bool>(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => const GatherEditScreen(),
-                            fullscreenDialog: true,
-                          ),
-                        );
-                        if (result == true) _loadGatherings();
-                      },  
-                      icon: const Icon(Icons.add_circle_outlined),
-                      iconSize: 35, 
-                      color: const Color(0xFF00E676).withValues(alpha: 0.7)
-                    )
+                  IconButton(
+                    onPressed: () async {
+                      final result = await Navigator.push<bool>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const GatherEditScreen(),
+                          fullscreenDialog: true,
+                        ),
+                      );
+                      if (result == true) _loadGatherings();
+                    },
+                    icon: const Icon(Icons.add_circle_outlined),
+                    iconSize: 35,
+                    color: const Color(0xFF00E676).withValues(alpha: 0.7),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 35),
+            const SizedBox(height: 20),
 
-            // 실시간 모집바
+            // 검색바
+            Container(
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (v) => setState(() => _searchQuery = v.trim()),
+                style: TextStyle(color: textColor, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: '모집글 검색...',
+                  hintStyle: TextStyle(color: subTextColor),
+                  prefixIcon: Icon(Icons.search, color: subTextColor, size: 20),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(Icons.clear, color: subTextColor, size: 18),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // 카테고리 필터 칩
+            SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: _categories.map((cat) {
+                  final isSelected = _selectedCategory == cat;
+                  return GestureDetector(
+                    onTap: () => setState(() => _selectedCategory = cat),
+                    child: Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFF00E676) : cardColor,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFF00E676)
+                              : (isDarkMode ? Colors.white24 : Colors.black12),
+                        ),
+                      ),
+                      child: Text(
+                        cat,
+                        style: TextStyle(
+                          color: isSelected ? Colors.black : subTextColor,
+                          fontSize: 13,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // 실시간 모집 헤더
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('실시간 모집 ✨', style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.bold)),
-                
+                Text('실시간 모집 ✨',
+                    style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.bold)),
                 PopupMenuButton<String>(
                   color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   position: PopupMenuPosition.under,
-                  
-                  onSelected: (String newValue) {
-                    setState(() {
-                      _currentSort = newValue;
-                    });
+                  onSelected: (value) {
+                    setState(() => _currentSort = value);
                     _loadGatherings();
                   },
-                  
-                  itemBuilder: (BuildContext context) {
-                    return ['최신순', '오래된순', '인기순', 'A-Z 순'].map((String choice) {
-                      return PopupMenuItem<String>(
-                        value: choice,
-                        child: Text(
-                          choice, 
-                          style: TextStyle(
-                            color: _currentSort == choice ? const Color(0xFF00E676) : textColor,
-                            fontWeight: _currentSort == choice ? FontWeight.bold : FontWeight.normal,
-                          ),
+                  itemBuilder: (ctx) => ['최신순', '오래된순', '인기순', 'A-Z 순'].map((choice) {
+                    return PopupMenuItem<String>(
+                      value: choice,
+                      child: Text(
+                        choice,
+                        style: TextStyle(
+                          color: _currentSort == choice ? const Color(0xFF00E676) : textColor,
+                          fontWeight: _currentSort == choice ? FontWeight.bold : FontWeight.normal,
                         ),
-                      );
-                    }).toList();
-                  },
-                  
+                      ),
+                    );
+                  }).toList(),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
@@ -251,54 +340,61 @@ class _GatherScreenState extends State<GatherScreen> {
             ),
             const SizedBox(height: 15),
 
-            // 모집 리스트 카드 (Supabase 연동)
+            // 모집 리스트
             if (_isLoading)
               const Center(child: CircularProgressIndicator(color: Color(0xFF00E676)))
-            else if (_gatherings.isEmpty)
+            else if (filtered.isEmpty)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.only(top: 40),
                   child: Text(
-                    '아직 모집글이 없어요.\n첫 번째로 크루를 모집해보세요! 🏃',
+                    _gatherings.isEmpty
+                        ? '아직 모집글이 없어요.\n첫 번째로 크루를 모집해보세요! 🏃'
+                        : '검색 결과가 없어요.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: subTextColor, fontSize: 15, height: 1.6),
                   ),
                 ),
               )
             else
-              ..._gatherings.map((g) => Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: RecruitmentCard(
-                  isDarkMode: isDarkMode,
-                  accentColor: _categoryColor(g['category'] ?? '기타'),
-                  category: g['category'] ?? '기타',
-                  timeAgo: _formatTimeAgo(g['created_at'] ?? DateTime.now().toIso8601String()),
-                  statusText: '👥 ${g['current_members']}/${g['max_members']}',
-                  title: g['title'] ?? '',
-                  description: g['description'] ?? '',
-                  gatherDate: _formatDateRange(g['gather_start'], g['gather_end']),
-                  userName: g['user_nickname'] ?? '알 수 없음',
-                  userScore: '',
-                  userBadge: '',
-                  extraInfoIcon: Icons.location_on_outlined,
-                  extraInfoText: _displayLocation(g['location']),
-                  gatheringId: g['id'],
-                  authorId: g['user_id'],
-                                    hostNickname: g['user_nickname'] ?? '익명',
-                                    gatheringTitle: g['title'] ?? '',
-                  onEdit: () async {
-                    final result = await Navigator.push<bool>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => GatherEditScreen(initialData: g),
-                        fullscreenDialog: true,
-                      ),
-                    );
-                    if (result == true) _loadGatherings();
-                  },
-                  onDelete: () => _deleteGathering(g['id']),
-                ),
-              )),
+              ...filtered.map((g) => Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: RecruitmentCard(
+                      isDarkMode: isDarkMode,
+                      accentColor: _categoryColor(g['category'] ?? '기타'),
+                      category: g['category'] ?? '기타',
+                      timeAgo: _formatTimeAgo(
+                          g['created_at'] ?? DateTime.now().toIso8601String()),
+                      currentMembers: (g['current_members'] ?? 0) as int,
+                      maxMembers: (g['max_members'] ?? 1) as int,
+                      isClosed: (g['is_closed'] ?? false) as bool,
+                      title: g['title'] ?? '',
+                      description: g['description'] ?? '',
+                      gatherDate: _formatDateRange(g['gather_start'], g['gather_end']),
+                      userName: g['user_nickname'] ?? '알 수 없음',
+                      userScore: '',
+                      userBadge: '',
+                      extraInfoIcon: Icons.location_on_outlined,
+                      extraInfoText: _displayLocation(g['location']),
+                      gatheringId: g['id'],
+                      authorId: g['user_id'],
+                      hostNickname: g['user_nickname'] ?? '익명',
+                      gatheringTitle: g['title'] ?? '',
+                      onEdit: () async {
+                        final result = await Navigator.push<bool>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => GatherEditScreen(initialData: g),
+                            fullscreenDialog: true,
+                          ),
+                        );
+                        if (result == true) _loadGatherings();
+                      },
+                      onDelete: () => _deleteGathering(g['id']),
+                      onToggleClosed: () =>
+                          _toggleClosed(g['id'], (g['is_closed'] ?? false) as bool),
+                    ),
+                  )),
             const SizedBox(height: 100),
           ],
         ),
@@ -307,13 +403,14 @@ class _GatherScreenState extends State<GatherScreen> {
   }
 }
 
-// 모집글 추가 사항 애니메이션 영역 기능 (저장 데이터 협의 필요)
 class RecruitmentCard extends StatefulWidget {
   final bool isDarkMode;
   final Color accentColor;
   final String category;
   final String timeAgo;
-  final String statusText;
+  final int currentMembers;
+  final int maxMembers;
+  final bool isClosed;
   final String title;
   final String description;
   final String gatherDate;
@@ -324,10 +421,11 @@ class RecruitmentCard extends StatefulWidget {
   final String extraInfoText;
   final String gatheringId;
   final String authorId;
-    final String hostNickname;
-    final String gatheringTitle;
+  final String hostNickname;
+  final String gatheringTitle;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
+  final VoidCallback? onToggleClosed;
 
   const RecruitmentCard({
     super.key,
@@ -335,7 +433,9 @@ class RecruitmentCard extends StatefulWidget {
     required this.accentColor,
     required this.category,
     required this.timeAgo,
-    required this.statusText,
+    required this.currentMembers,
+    required this.maxMembers,
+    required this.isClosed,
     required this.title,
     required this.description,
     required this.gatherDate,
@@ -346,19 +446,20 @@ class RecruitmentCard extends StatefulWidget {
     required this.extraInfoText,
     required this.gatheringId,
     required this.authorId,
-      required this.hostNickname,
-      required this.gatheringTitle,
+    required this.hostNickname,
+    required this.gatheringTitle,
     this.onEdit,
     this.onDelete,
+    this.onToggleClosed,
   });
 
   @override
   State<RecruitmentCard> createState() => _RecruitmentCardState();
 }
 
-class _RecruitmentCardState extends State<RecruitmentCard> with SingleTickerProviderStateMixin {
-  bool _isExpanded = false; 
-  
+class _RecruitmentCardState extends State<RecruitmentCard>
+    with SingleTickerProviderStateMixin {
+  bool _isExpanded = false;
   late AnimationController _expandController;
   late Animation<double> _animation;
 
@@ -377,7 +478,7 @@ class _RecruitmentCardState extends State<RecruitmentCard> with SingleTickerProv
 
   @override
   void dispose() {
-    _expandController.dispose(); 
+    _expandController.dispose();
     super.dispose();
   }
 
@@ -385,9 +486,9 @@ class _RecruitmentCardState extends State<RecruitmentCard> with SingleTickerProv
     setState(() {
       _isExpanded = !_isExpanded;
       if (_isExpanded) {
-        _expandController.forward(); // 열기 애니메이션 재생
+        _expandController.forward();
       } else {
-        _expandController.reverse(); // 닫기 애니메이션 재생
+        _expandController.reverse();
       }
     });
   }
@@ -397,6 +498,8 @@ class _RecruitmentCardState extends State<RecruitmentCard> with SingleTickerProv
     final cardColor = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = widget.isDarkMode ? Colors.white : Colors.black;
     final subTextColor = widget.isDarkMode ? Colors.white54 : Colors.black54;
+    final isAuthor =
+        Supabase.instance.client.auth.currentUser?.id == widget.authorId;
 
     return Container(
       decoration: BoxDecoration(
@@ -404,41 +507,74 @@ class _RecruitmentCardState extends State<RecruitmentCard> with SingleTickerProv
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           if (!widget.isDarkMode)
-            BoxShadow(color: Colors.grey.withValues(alpha: 0.2), blurRadius: 10, offset: const Offset(0, 4)),
+            BoxShadow(
+                color: Colors.grey.withValues(alpha: 0.2),
+                blurRadius: 10,
+                offset: const Offset(0, 4)),
         ],
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
         child: Container(
           decoration: BoxDecoration(
-            border: Border(left: BorderSide(color: widget.accentColor, width: 6)),
+            border: Border(
+                left: BorderSide(
+                    color: widget.isClosed
+                        ? Colors.grey
+                        : widget.accentColor,
+                    width: 6)),
           ),
-          padding: const EdgeInsets.only(top: 20, left: 20, right: 20, bottom: 5), 
+          padding: const EdgeInsets.only(top: 18, left: 20, right: 20, bottom: 4),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. 카테고리 및 시간
+              // 1. 카테고리 + 마감 배지 + 시간 + 더보기
               Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: widget.accentColor.withValues(alpha: 0.15),
+                      color: (widget.isClosed ? Colors.grey : widget.accentColor)
+                          .withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: widget.accentColor.withValues(alpha: 0.3)),
+                      border: Border.all(
+                          color: (widget.isClosed ? Colors.grey : widget.accentColor)
+                              .withValues(alpha: 0.3)),
                     ),
-                    child: Text(widget.category, style: TextStyle(color: widget.accentColor, fontSize: 12, fontWeight: FontWeight.bold)),
+                    child: Text(widget.category,
+                        style: TextStyle(
+                            color: widget.isClosed ? Colors.grey : widget.accentColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold)),
                   ),
-                  const SizedBox(width: 10),
-                  Text(widget.timeAgo, style: TextStyle(color: subTextColor, fontSize: 12)),
+                  if (widget.isClosed) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.withValues(alpha: 0.35)),
+                      ),
+                      child: const Text('마감',
+                          style: TextStyle(
+                              color: Colors.red,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                  const SizedBox(width: 8),
+                  Text(widget.timeAgo,
+                      style: TextStyle(color: subTextColor, fontSize: 12)),
                   const Spacer(),
-                  Text(widget.statusText, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.bold)),
-                  // 작성자 본인에게만 수정/삭제 메뉴 표시
-                  if (Supabase.instance.client.auth.currentUser?.id == widget.authorId)
+                  if (isAuthor)
                     PopupMenuButton<String>(
                       icon: Icon(Icons.more_vert, color: subTextColor, size: 18),
-                      color: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      color: widget.isDarkMode
+                          ? const Color(0xFF2C2C2C)
+                          : Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
                       onSelected: (value) {
                         if (value == 'edit') widget.onEdit?.call();
                         if (value == 'delete') widget.onDelete?.call();
@@ -446,186 +582,317 @@ class _RecruitmentCardState extends State<RecruitmentCard> with SingleTickerProv
                       itemBuilder: (ctx) => [
                         PopupMenuItem(
                           value: 'edit',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit_outlined, size: 18, color: widget.isDarkMode ? Colors.white70 : Colors.black87),
-                              const SizedBox(width: 8),
-                              const Text('수정'),
-                            ],
-                          ),
+                          child: Row(children: [
+                            Icon(Icons.edit_outlined,
+                                size: 18,
+                                color: widget.isDarkMode
+                                    ? Colors.white70
+                                    : Colors.black87),
+                            const SizedBox(width: 8),
+                            const Text('수정'),
+                          ]),
                         ),
                         PopupMenuItem(
                           value: 'delete',
-                          child: Row(
-                            children: [
-                              const Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                              const SizedBox(width: 8),
-                              const Text('삭제', style: TextStyle(color: Colors.red)),
-                            ],
-                          ),
+                          child: Row(children: [
+                            const Icon(Icons.delete_outline,
+                                size: 18, color: Colors.red),
+                            const SizedBox(width: 8),
+                            const Text('삭제',
+                                style: TextStyle(color: Colors.red)),
+                          ]),
                         ),
                       ],
                     ),
                 ],
               ),
-              const SizedBox(height: 16),
-              
-              // 2. 제목
-              Text(widget.title, style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
+              const SizedBox(height: 14),
 
-              // 3. 유저 정보 및 위치
+              // 2. 제목
+              Text(widget.title,
+                  style: TextStyle(
+                      color: widget.isClosed ? subTextColor : textColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold)),
+              const SizedBox(height: 14),
+
+              // 3. 유저 정보 + 위치
               Row(
                 children: [
                   CircleAvatar(
                     radius: 16,
-                    backgroundColor: widget.isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[300],
+                    backgroundColor: widget.isDarkMode
+                        ? const Color(0xFF2C2C2C)
+                        : Colors.grey[300],
                     child: Icon(Icons.person, color: subTextColor, size: 20),
                   ),
                   const SizedBox(width: 10),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(widget.userName, style: TextStyle(color: textColor, fontSize: 13, fontWeight: FontWeight.w600)),
+                      Text(widget.userName,
+                          style: TextStyle(
+                              color: textColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
                       Row(
                         children: [
-                          const Icon(Icons.thermostat, color: Color(0xFF00E676), size: 12),
-                          Text(widget.userScore, style: TextStyle(color: const Color(0xFF00E676), fontSize: 11)),
+                          const Icon(Icons.thermostat,
+                              color: Color(0xFF00E676), size: 12),
+                          Text(widget.userScore,
+                              style: const TextStyle(
+                                  color: Color(0xFF00E676), fontSize: 11)),
                           const SizedBox(width: 6),
-                          Text(widget.userBadge, style: TextStyle(color: Colors.orangeAccent, fontSize: 11)),
+                          Text(widget.userBadge,
+                              style: const TextStyle(
+                                  color: Colors.orangeAccent, fontSize: 11)),
                         ],
                       ),
                     ],
                   ),
                   const Spacer(),
-                  ElevatedButton.icon(
-                    onPressed: () {},
-                    icon: Icon(widget.extraInfoIcon, color: textColor),
-                    label: Text(widget.extraInfoText, style: TextStyle(color: textColor)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: cardColor,
-                      elevation: 0,
-                      shadowColor: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    ).copyWith(
-                      overlayColor: WidgetStateProperty.all(Colors.transparent),
-                      surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
-                    ),
-                  )
+                  Row(
+                    children: [
+                      Icon(widget.extraInfoIcon, color: subTextColor, size: 14),
+                      const SizedBox(width: 4),
+                      Text(widget.extraInfoText,
+                          style: TextStyle(color: subTextColor, fontSize: 12)),
+                    ],
+                  ),
                 ],
               ),
-              
-              // 💡 4. 상세정보 영역 (정보 및 애니메이션 적용)
+
+              // 4. 멤버 진행바
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: widget.maxMembers > 0
+                            ? (widget.currentMembers / widget.maxMembers)
+                                .clamp(0.0, 1.0)
+                            : 0,
+                        backgroundColor: widget.isDarkMode
+                            ? Colors.white12
+                            : Colors.grey[200],
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                            widget.isClosed ? Colors.grey : widget.accentColor),
+                        minHeight: 6,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '${widget.currentMembers}/${widget.maxMembers}명',
+                    style: TextStyle(
+                        color: widget.isClosed ? subTextColor : widget.accentColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+
+              // 5. 상세정보 (애니메이션 펼치기)
               SizeTransition(
                 sizeFactor: _animation,
-                axisAlignment: -1.0, // 위치 고정
+                axisAlignment: -1.0,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const SizedBox(height: 16),
-                    Divider(color: widget.isDarkMode ? Colors.white12 : Colors.black12),
+                    Divider(
+                        color: widget.isDarkMode
+                            ? Colors.white12
+                            : Colors.black12),
                     const SizedBox(height: 12),
-                    
-                    // 모집 날짜 정보
+
+                    // 모집 날짜
                     Row(
                       children: [
-                        Icon(Icons.calendar_today_outlined, color: subTextColor, size: 16),
+                        Icon(Icons.calendar_today_outlined,
+                            color: subTextColor, size: 16),
                         const SizedBox(width: 8),
-                        Text('모집 기간: ', style: TextStyle(color: subTextColor, fontSize: 13, fontWeight: FontWeight.bold)),
-                        Text(widget.gatherDate, style: TextStyle(color: textColor, fontSize: 13)),
+                        Text('모집 기간: ',
+                            style: TextStyle(
+                                color: subTextColor,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold)),
+                        Expanded(
+                          child: Text(widget.gatherDate,
+                              style: TextStyle(color: textColor, fontSize: 13)),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
-                    
-                    // 본문 내용
-                    Text(
-                      widget.description,
-                      style: TextStyle(color: textColor, fontSize: 14, height: 1.5),
-                    ),
-                    const SizedBox(height: 10),
-                                      // 채팅하기 버튼 (비작성자에게만 표시)
-                                      if (Supabase.instance.client.auth.currentUser?.id != widget.authorId)
-                                        Padding(
-                                          padding: const EdgeInsets.only(bottom: 12),
-                                          child: SizedBox(
-                                            width: double.infinity,
-                                            child: ElevatedButton.icon(
-                                              onPressed: () async {
-                                                final currentUser = Supabase.instance.client.auth.currentUser;
-                                                if (currentUser == null) return;
-                                                try {
-                                                  // 기존 채팅방 조회
-                                                  final existing = await Supabase.instance.client
-                                                      .from('chat_rooms')
-                                                      .select()
-                                                      .eq('gathering_id', widget.gatheringId)
-                                                      .eq('guest_id', currentUser.id)
-                                                      .maybeSingle();
 
-                                                  String roomId;
-                                                  if (existing != null) {
-                                                    roomId = existing['id'];
-                                                  } else {
-                                                    final created = await Supabase.instance.client
-                                                        .from('chat_rooms')
-                                                        .insert({
-                                                          'gathering_id': widget.gatheringId,
-                                                          'gathering_title': widget.gatheringTitle,
-                                                          'host_id': widget.authorId,
-                                                          'host_nickname': widget.hostNickname,
-                                                          'guest_id': currentUser.id,
-                                                          'guest_nickname': currentUser.userMetadata?['display_name'] ?? currentUser.email ?? '익명',
-                                                        })
-                                                        .select()
-                                                        .single();
-                                                    roomId = created['id'];
-                                                  }
-                                                  if (!context.mounted) return;
-                                                  Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute(
-                                                      builder: (context) => ChatRoomScreen(
-                                                        roomId: roomId,
-                                                        otherUserNickname: widget.hostNickname,
-                                                        gatheringTitle: widget.gatheringTitle,
-                                                      ),
-                                                    ),
-                                                  );
-                                                } catch (e) {
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.of(context).showSnackBar(
-                                                      SnackBar(content: Text('채팅 시작 실패: $e')),
-                                                    );
-                                                  }
-                                                }
-                                              },
-                                              icon: const Icon(Icons.chat_bubble_outline, size: 18, color: Colors.black),
-                                              label: const Text('채팅하기', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                                              style: ElevatedButton.styleFrom(
-                                                backgroundColor: const Color(0xFF00E676),
-                                                elevation: 0,
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius: BorderRadius.circular(12),
-                                                ),
-                                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                              ),
-                                            ),
+                    // 본문
+                    Text(widget.description,
+                        style: TextStyle(
+                            color: textColor, fontSize: 14, height: 1.5)),
+                    const SizedBox(height: 14),
+
+                    // 채팅하기 (비작성자) or 마감하기/재모집 (작성자)
+                    if (isAuthor)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: widget.onToggleClosed,
+                            icon: Icon(
+                              widget.isClosed
+                                  ? Icons.refresh_rounded
+                                  : Icons.block_rounded,
+                              size: 18,
+                              color: widget.isClosed
+                                  ? const Color(0xFF00E676)
+                                  : Colors.red,
+                            ),
+                            label: Text(
+                              widget.isClosed ? '재모집하기' : '모집 마감하기',
+                              style: TextStyle(
+                                color: widget.isClosed
+                                    ? const Color(0xFF00E676)
+                                    : Colors.red,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(
+                                  color: widget.isClosed
+                                      ? const Color(0xFF00E676)
+                                      : Colors.red),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: widget.isClosed
+                              ? Container(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
+                                  decoration: BoxDecoration(
+                                    color: widget.isDarkMode
+                                        ? Colors.white12
+                                        : Colors.grey[200],
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Center(
+                                    child: Text('모집이 마감되었어요',
+                                        style: TextStyle(
+                                            color: subTextColor,
+                                            fontWeight: FontWeight.bold)),
+                                  ),
+                                )
+                              : ElevatedButton.icon(
+                                  onPressed: () async {
+                                    final currentUser = Supabase
+                                        .instance.client.auth.currentUser;
+                                    if (currentUser == null) return;
+                                    try {
+                                      final existing =
+                                          await Supabase.instance.client
+                                              .from('chat_rooms')
+                                              .select()
+                                              .eq('gathering_id',
+                                                  widget.gatheringId)
+                                              .eq('guest_id', currentUser.id)
+                                              .maybeSingle();
+
+                                      String roomId;
+                                      if (existing != null) {
+                                        roomId = existing['id'];
+                                      } else {
+                                        final created = await Supabase
+                                            .instance.client
+                                            .from('chat_rooms')
+                                            .insert({
+                                              'gathering_id':
+                                                  widget.gatheringId,
+                                              'gathering_title':
+                                                  widget.gatheringTitle,
+                                              'host_id': widget.authorId,
+                                              'host_nickname':
+                                                  widget.hostNickname,
+                                              'guest_id': currentUser.id,
+                                              'guest_nickname': currentUser
+                                                      .userMetadata?[
+                                                          'display_name'] ??
+                                                  currentUser.email ??
+                                                  '익명',
+                                            })
+                                            .select()
+                                            .single();
+                                        roomId = created['id'];
+                                      }
+                                      if (!context.mounted) return;
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (context) => ChatRoomScreen(
+                                            roomId: roomId,
+                                            otherUserNickname:
+                                                widget.hostNickname,
+                                            gatheringTitle:
+                                                widget.gatheringTitle,
                                           ),
                                         ),
+                                      );
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(SnackBar(
+                                                content: Text(
+                                                    '채팅 시작 실패: $e')));
+                                      }
+                                    }
+                                  },
+                                  icon: const Icon(
+                                      Icons.chat_bubble_outline,
+                                      size: 18,
+                                      color: Colors.black),
+                                  label: const Text('채팅하기',
+                                      style: TextStyle(
+                                          color: Colors.black,
+                                          fontWeight: FontWeight.bold)),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF00E676),
+                                    elevation: 0,
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12)),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                  ),
+                                ),
+                        ),
+                      ),
                   ],
                 ),
               ),
 
-              // 💡 5. 펼치기/접기 화살표 버튼
+              // 6. 펼치기/접기 버튼
               Center(
                 child: IconButton(
                   onPressed: _toggleExpand,
                   icon: Icon(
-                    _isExpanded ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down, 
-                    color: subTextColor
+                    _isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: subTextColor,
                   ),
-                  splashColor: Colors.transparent, 
+                  splashColor: Colors.transparent,
                   highlightColor: Colors.transparent,
                 ),
               ),

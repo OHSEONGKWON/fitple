@@ -216,7 +216,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
                         setState(() => _selectedCategory = category);
                       }
                     },
-                    selectedColor: const Color(0xFF00E676).withOpacity(0.2),
+                    selectedColor: const Color(0xFF00E676).withValues(alpha: 0.2),
                     labelStyle: TextStyle(
                       color: isSelected 
                           ? const Color(0xFF00E676) 

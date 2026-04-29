@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/splash_screen.dart';
+import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,6 +12,7 @@ void main() async {
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmcHB1amN4cHpuY2p1ZnhicHZ4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ2MzI4MjEsImV4cCI6MjA5MDIwODgyMX0.tEcMO4thoyCJzk4Qt_XkepWEQ3kHxEaQGSW-S6R8MVM',
   );
 
+  await NotificationService.initialize();
   runApp(const FitpleApp());
 }
 
