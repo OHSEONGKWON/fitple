@@ -106,19 +106,16 @@ class _GatherScreenState extends State<GatherScreen> {
   }
 
   Future<void> _toggleClosed(String id, bool isClosed) async {
-    try {
-      await Supabase.instance.client
-          .from('gatherings')
-          .update({'is_closed': !isClosed})
-          .eq('id', id);
-      _loadGatherings();
-    } catch (e) {
+    // 현재는 모집 마감 시 삭제하는 방식으로 처리합니다.
+    if (isClosed) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('상태 변경 실패: $e')),
+          const SnackBar(content: Text('재모집 기능은 현재 지원되지 않습니다.')),
         );
       }
+      return;
     }
+    await _deleteGathering(id);
   }
 
   String _formatTimeAgo(String createdAt) {

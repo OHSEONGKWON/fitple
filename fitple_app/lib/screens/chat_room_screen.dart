@@ -245,6 +245,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             ),
           ],
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.exit_to_app),
+            tooltip: '나가기',
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
       ),
       body: Column(
         children: [
