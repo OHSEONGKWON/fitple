@@ -27,11 +27,33 @@ class FitpleApp extends StatelessWidget {
         brightness: Brightness.light,
         scaffoldBackgroundColor: Colors.white,
         fontFamily: 'Pretendard',
+        splashFactory: NoSplash.splashFactory,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        appBarTheme: const AppBarTheme(
+          scrolledUnderElevation: 0,
+        ),
+        iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(
+        overlayColor: WidgetStateProperty.all(Colors.transparent),
+    ),
+  ),
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: const Color(0xFF121212),
         fontFamily: 'Pretendard',
+        splashFactory: NoSplash.splashFactory,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        appBarTheme: const AppBarTheme(
+          scrolledUnderElevation: 0,
+        ),
+        iconButtonTheme: IconButtonThemeData(
+        style: ButtonStyle(
+        overlayColor: WidgetStateProperty.all(Colors.transparent),
+    ),
+  ),
       ),
       themeMode: ThemeMode.system,
       home: const SplashScreen(),
