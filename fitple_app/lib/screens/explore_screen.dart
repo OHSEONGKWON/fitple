@@ -38,7 +38,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
       final me = Supabase.instance.client.auth.currentUser;
       final data = await Supabase.instance.client
           .from('gatherings')
-          .select('user_id, user_nickname, category, created_at, is_closed')
+          .select('user_id, user_nickname, category, created_at')
           .order('created_at', ascending: false);
 
       final Map<String, _UserProfile> map = {};
@@ -59,7 +59,7 @@ class _ExploreScreenState extends State<ExploreScreen> {
         final cat = row['category'] as String? ?? '기타';
         profile.sports.add(cat);
         profile.gatheringCount++;
-        if (row['is_closed'] == false) profile.activeCount++;
+        profile.activeCount++;
       }
 
       final users = map.values.toList()
