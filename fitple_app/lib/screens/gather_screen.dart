@@ -624,19 +624,19 @@ class _RecruitmentCardState extends State<RecruitmentCard>
                     backgroundColor: widget.isDarkMode
                         ? const Color(0xFF2C2C2C)
                         : Colors.grey[300],
-                    child: Icon(Icons.person, color: subTextColor, size: 20),
+                    child: Icon(Icons.person, color: subTextColor, size: 20), //나중에 사용자 프로필 사진으로 바꿔야함
                   ),
                   const SizedBox(width: 10),
-                  Column(
+                  Column( //닉네임, 온도
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                    children: [//닉네임
                       Text(widget.userName,
                           style: TextStyle(
                               color: textColor,
                               fontSize: 13,
                               fontWeight: FontWeight.w600)),
                       const SizedBox(height: 2),
-                      Row(
+                      Row( //온도
                         children: [
                           const Icon(Icons.thermostat,
                               color: Color(0xFF00E676), size: 12),
@@ -651,13 +651,25 @@ class _RecruitmentCardState extends State<RecruitmentCard>
                       ),
                     ],
                   ),
-                  const Spacer(),
+                  const Spacer(), //공백
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(widget.extraInfoIcon, color: subTextColor, size: 14),
-                      const SizedBox(width: 4),
-                      Text(widget.extraInfoText,
-                          style: TextStyle(color: subTextColor, fontSize: 12)),
+                      ElevatedButton.icon(
+                        onPressed: () {},
+                        icon: Icon(Icons.location_on_outlined, color: subTextColor, size: 14, ),
+                        label: Text(widget.extraInfoText, style: TextStyle(color: subTextColor, fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: cardColor,
+                          elevation: 0,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                          alignment: Alignment.centerRight,
+                        ).copyWith(
+                          overlayColor: WidgetStateProperty.all(Colors.transparent),
+                          surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
+                        ),
+                      )
                     ],
                   ),
                 ],
