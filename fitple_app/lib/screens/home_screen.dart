@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:image_picker/image_picker.dart';
 import 'chat_list_screen.dart';
 import 'gather_edit_screen.dart';
 import 'gather_screen.dart';
+import 'story_add_screen.dart';
+import 'dart:typed_data';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -75,14 +76,8 @@ class _HomeScreenState extends State<HomeScreen> {
     return '${diff.inDays}일 전';
   }
 
-  Future<void> _uploadStory(ImageSource source) async {
+  Future<void> _uploadStory(Uint8List fileBytes) async {
     try {
-      final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(source: source, imageQuality: 80);
-
-      if (pickedFile == null) return;
-
-      final fileBytes = await pickedFile.readAsBytes();
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return;
 
@@ -140,128 +135,70 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // 스토리 업로드 섹션
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            Container(
+              height: 115,
+              margin: const EdgeInsets.only(top: 16),
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
                 children: [
-                  Text(
-                    _nickname.isEmpty ? '스토리' : '$_nickname의 스토리',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: isDarkMode ? Colors.white : Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      // 계속 보기 버튼 (향후 업로드된 스토리 보여주기)
-                      Container(
-                        width: 72,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: const Color(0xFF00E676),
-                            width: 2,
+                  // 1. 내 스토리 (플러스 아이콘 포함)
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => StorySelectionScreen(
+                            onImageSelected: (bytes) {
+                              _uploadStory(bytes);
+                            },
                           ),
-                          color: isDarkMode
-                              ? Colors.grey[800]
-                              : Colors.grey[100],
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                      );
+                    },
+                    child: Column(
+                      children: [
+                        Stack(
                           children: [
-                            const Text('👤', style: TextStyle(fontSize: 32)),
-                            const SizedBox(height: 4),
-                            Text(
-                              '내 스토리',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: isDarkMode
-                                    ? Colors.white70
-                                    : Colors.black54,
+                            Container(
+                              width: 76,
+                              height: 76,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
+                              ),
+                              child: const Center(
+                                child: Text('👤', style: TextStyle(fontSize: 34)),
+                              ),
+                            ),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.blueAccent,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isDarkMode ? const Color(0xFF121212) : Colors.white,
+                                    width: 3,
+                                  ),
+                                ),
+                                child: const Icon(Icons.add, size: 16, color: Colors.white),
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      // 카메라로 촬영 버튼
-                      GestureDetector(
-                        onTap: () => _uploadStory(ImageSource.camera),
-                        child: Container(
-                          width: 72,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF00E676), Color(0xFF00BFA5)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF00E676).withValues(alpha: 0.3),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text('📷', style: TextStyle(fontSize: 32)),
-                              const SizedBox(height: 4),
-                              Text(
-                                '촬영',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Colors.black87,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
+                        const SizedBox(height: 6),
+                        Text(
+                          '내 스토리',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: isDarkMode ? Colors.white70 : Colors.black87,
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      // 갤러리에서 선택 버튼
-                      GestureDetector(
-                        onTap: () => _uploadStory(ImageSource.gallery),
-                        child: Container(
-                          width: 72,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            color: isDarkMode
-                                ? Colors.grey[700]
-                                : Colors.grey[200],
-                            border: Border.all(
-                              color: const Color(0xFF00E676),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Text('🖼️', style: TextStyle(fontSize: 32)),
-                              const SizedBox(height: 4),
-                              Text(
-                                '갤러리',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: isDarkMode
-                                      ? Colors.white70
-                                      : Colors.black54,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
