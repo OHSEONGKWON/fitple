@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:latlong2/latlong.dart';
+import 'map_picker_screen.dart';
 
 class GatherEditScreen extends StatefulWidget {
   final Map<String, dynamic>? initialData;
@@ -20,6 +22,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
   // 2. 선택 상태 변수들
   String _selectedCategory = '축구'; // 기본 선택 종목
   DateTimeRange? _selectedDateRange; // 모집 날짜 범위
+  LatLng? _pickedLatLng; // 지도에서 선택한 좌표
 
   @override
   void initState() {
@@ -49,7 +52,25 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
     super.dispose();
   }
 
-  // 💡 달력을 띄워서 날짜 범위를 선택하게 해주는 함수
+  Future<void> _openMapPicker() async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapPickerScreen(initialLatLng: _pickedLatLng),
+      ),
+    );
+    if (result != null) {
+      setState(() {
+        _pickedLatLng = result['latLng'] as LatLng?;
+        final address = result['address'] as String? ?? '';
+        if (address.isNotEmpty) {
+          _locationController.text = address;
+        }
+      });
+    }
+  }
+
+
   Future<void> _selectDateRange() async {
     final DateTimeRange? picked = await showDateRangePicker(
       context: context,
@@ -376,21 +397,44 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
               // ==============================
               Text('장소', style: labelStyle),
               const SizedBox(height: 8),
-              TextField(
-                controller: _locationController,
-                style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
-                decoration: InputDecoration(
-                  hintText: '예: 평거동 야외무대',
-                  hintStyle: TextStyle(
-                    color: isDarkMode ? Colors.white30 : Colors.black26,
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _locationController,
+                      style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+                      decoration: InputDecoration(
+                        hintText: '예: 평거동 야외무대',
+                        hintStyle: TextStyle(
+                          color: isDarkMode ? Colors.white30 : Colors.black26,
+                        ),
+                        filled: true,
+                        fillColor: isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[100],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                    ),
                   ),
-                  filled: true,
-                  fillColor: isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[100],
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      onPressed: _openMapPicker,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00E676),
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                      ),
+                      icon: const Icon(Icons.map_outlined, size: 20),
+                      label: const Text('지도 선택'),
+                    ),
                   ),
-                ),
+                ],
               ),
               const SizedBox(height: 40),
 

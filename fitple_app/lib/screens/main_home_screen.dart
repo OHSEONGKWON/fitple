@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'profile_screen.dart';
 import 'home_screen.dart';
 import 'gather_screen.dart';
-import 'chat_list_screen.dart';
 
 class MainHomeScreen extends StatefulWidget {
   const MainHomeScreen({super.key});
@@ -30,7 +29,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         ),
       ),
       const GatherScreen(), //gatherscreen이랑 연결
-      const ChatListScreen(),
       const ProfileScreen(),
     ];
 
@@ -68,19 +66,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
           ],
         ),
         actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const ChatListScreen()),
-              );
-            },
-            icon: Icon(
-              Icons.chat_bubble_outline,
-              color: isDarkMode ? Colors.white : Colors.black,
-              size: 28,
-            ),
-          ),
           const SizedBox(width: 0),
           IconButton(
             onPressed: () {},
@@ -138,10 +123,6 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                 BottomNavigationBarItem(
                   icon: Icon(Icons.add_outlined),
                   label: '모집'),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.chat_bubble_outline),
-                  label: '커뮤니티',
-                ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.person_outline),
                   label: '프로필',

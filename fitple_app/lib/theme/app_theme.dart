@@ -64,6 +64,9 @@ class AppTheme {
           textStyle: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.fixed,
+      ),
     );
   }
 
@@ -121,6 +124,9 @@ class AppTheme {
           minimumSize: const Size.fromHeight(50),
           textStyle: const TextStyle(fontWeight: FontWeight.bold),
         ),
+      ),
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.fixed,
       ),
     );
   }
