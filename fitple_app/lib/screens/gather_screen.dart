@@ -649,25 +649,34 @@ class _RecruitmentCardState extends State<RecruitmentCard>
                     ],
                   ),
                   const Spacer(), //공백
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      ElevatedButton.icon(
-                        onPressed: () {},
-                        icon: Icon(Icons.location_on_outlined, color: subTextColor, size: 14, ),
-                        label: Text(widget.extraInfoText, style: TextStyle(color: subTextColor, fontSize: 12)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: cardColor,
-                          elevation: 0,
-                          shadowColor: Colors.transparent,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                          alignment: Alignment.centerRight,
-                        ).copyWith(
-                          overlayColor: WidgetStateProperty.all(Colors.transparent),
-                          surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
+                  Flexible(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Flexible(
+                          child: ElevatedButton.icon(
+                            onPressed: () {},
+                            icon: Icon(Icons.location_on_outlined, color: subTextColor, size: 14),
+                            label: Text(
+                              widget.extraInfoText,
+                              style: TextStyle(color: subTextColor, fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: cardColor,
+                              elevation: 0,
+                              shadowColor: Colors.transparent,
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                              alignment: Alignment.centerRight,
+                            ).copyWith(
+                              overlayColor: WidgetStateProperty.all(Colors.transparent),
+                              surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
+                            ),
+                          ),
                         ),
-                      )
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
