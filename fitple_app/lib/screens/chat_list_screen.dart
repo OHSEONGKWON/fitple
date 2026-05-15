@@ -49,7 +49,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
               title: msg['sender_nickname'] as String? ?? '새 메시지',
               body: msg['message_type'] == 'image'
                   ? '📷 사진을 보냈습니다'
-                  : (msg['content'] as String? ?? ''),
+                  : msg['message_type'] == 'schedule_proposal'
+                      ? '📅 일정을 제안했습니다'
+                      : (msg['content'] as String? ?? ''),
             );
 
             _loadRooms();
@@ -159,6 +161,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
     return room['host_nickname'] ?? '상대방';
   }
 
+  String? _getOtherUserId(Map<String, dynamic> room) {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user?.id == room['host_id']) return room['guest_id'] as String?;
+    return room['host_id'] as String?;
+  }
+
   String _formatPreviewTime(String? isoTime) {
     if (isoTime == null) return '';
     final dt = DateTime.tryParse(isoTime)?.toLocal();
@@ -233,7 +241,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                           ? room['gathering_title'] ?? '모집글'
                           : lastMsg['message_type'] == 'image'
                               ? '📷 사진'
-                              : (lastMsg['content'] as String? ?? '');
+                              : lastMsg['message_type'] == 'schedule_proposal'
+                                  ? '📅 일정 제안'
+                                  : (lastMsg['content'] as String? ?? '');
                       final previewTime =
                           _formatPreviewTime(lastMsg?['created_at'] as String?);
 
@@ -247,6 +257,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                 otherUserNickname: otherNickname,
                                 gatheringTitle:
                                     room['gathering_title'] ?? '모집글',
+                                otherUserId: _getOtherUserId(room),
                               ),
                             ),
                           );

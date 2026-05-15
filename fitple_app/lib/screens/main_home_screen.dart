@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'profile_screen.dart';
 import 'home_screen.dart';
 import 'gather_screen.dart';
+import 'calendar_screen.dart';
 
 class MainHomeScreen extends StatefulWidget {
   const MainHomeScreen({super.key});
@@ -19,15 +20,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 
     final List<Widget> pages = [
       const HomeScreen(),
-      Center(
-        child: Text(
-          '임시 탐색 화면',
-          style: TextStyle(
-            color: isDarkMode ? Colors.white70 : Colors.black87,
-            fontSize: 18,
-          ),
-        ),
-      ),
+      const CalendarScreen(),
       const GatherScreen(), //gatherscreen이랑 연결
       const ProfileScreen(),
     ];
@@ -39,31 +32,34 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         backgroundColor: isDarkMode ? const Color(0xFF121212) : Colors.white,
         elevation: 0,
         titleSpacing: 20,
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: const BoxDecoration(
-                color: Color(0xFF00E676),
-                shape: BoxShape.circle,
+        title: GestureDetector(
+          onTap: () => setState(() => _currentIndex = 0),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF00E676),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.fitness_center,
+                  color: Colors.black,
+                  size: 18,
+                ),
               ),
-              child: const Icon(
-                Icons.fitness_center,
-                color: Colors.black,
-                size: 18,
+              const SizedBox(width: 12),
+              Text(
+                'Fitple',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white : Colors.black,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22,
+                  letterSpacing: -0.5,
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Fitple',
-              style: TextStyle(
-                color: isDarkMode ? Colors.white : Colors.black,
-                fontWeight: FontWeight.bold,
-                fontSize: 22,
-                letterSpacing: -0.5,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
           const SizedBox(width: 0),
@@ -118,8 +114,8 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                   label: '홈',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.search),
-                  label: '탐색'),
+                  icon: Icon(Icons.calendar_month_outlined),
+                  label: '일정'),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.add_outlined),
                   label: '모집'),

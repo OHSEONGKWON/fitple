@@ -6,6 +6,7 @@ import 'gather_screen.dart';
 import 'story_add_screen.dart';
 import 'story_show_screen.dart';
 import 'dart:typed_data';
+import 'workout_cert_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,11 +21,19 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _myStoryUrl; // 내 최신 스토리 공개 URL
   String _nickname = '';
   String _userId = '';
+  bool _isCertifiedToday = false;
+  int _streakCount = 0;
+
+  static String get _todayStr {
+    final now = DateTime.now().toLocal();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadWorkoutStatus();
   }
 
   Future<void> _loadData() async {
@@ -94,6 +103,32 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {
       if (mounted) setState(() => _nickname = nickname);
     }
+  }
+
+  Future<void> _loadWorkoutStatus() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    try {
+      final results = await Future.wait([
+        Supabase.instance.client
+            .from('workout_certifications')
+            .select('id')
+            .eq('user_id', user.id)
+            .eq('cert_date', _todayStr)
+            .maybeSingle(),
+        Supabase.instance.client
+            .from('user_points')
+            .select('streak_count')
+            .eq('user_id', user.id)
+            .maybeSingle(),
+      ]);
+      if (mounted) {
+        setState(() {
+          _isCertifiedToday = results[0] != null;
+          _streakCount = results[1]?['streak_count'] as int? ?? 0;
+        });
+      }
+    } catch (_) {}
   }
 
   Color _categoryColor(String category) {
@@ -406,6 +441,26 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 28),
 
+            // 오운완 인증 배너
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: _WorkoutBanner(
+                isCertified: _isCertifiedToday,
+                streak: _streakCount,
+                isDarkMode: isDarkMode,
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const WorkoutCertScreen()),
+                  );
+                  _loadWorkoutStatus();
+                },
+              ),
+            ),
+
+            const SizedBox(height: 28),
+
             // 최근 모집
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -530,6 +585,106 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
 
             const SizedBox(height: 100),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkoutBanner extends StatelessWidget {
+  final bool isCertified;
+  final int streak;
+  final bool isDarkMode;
+  final VoidCallback onTap;
+
+  const _WorkoutBanner({
+    required this.isCertified,
+    required this.streak,
+    required this.isDarkMode,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isCertified) {
+      return GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF00E676), Color(0xFF00BFA5)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              const Text('🎉', style: TextStyle(fontSize: 28)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('오늘 오운완 완료!',
+                        style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black)),
+                    Text('연속 $streak일째 운동 중 🔥',
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.black87)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+              color: const Color(0xFF00E676).withValues(alpha: 0.4), width: 1.5),
+          boxShadow: [
+            if (!isDarkMode)
+              BoxShadow(
+                  color: Colors.grey.withValues(alpha: 0.1), blurRadius: 8),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Text('💪', style: TextStyle(fontSize: 28)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('오운완 인증하기',
+                      style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: isDarkMode ? Colors.white : Colors.black)),
+                  Text('인증하면 +10P 적립!',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color:
+                              isDarkMode ? Colors.white54 : Colors.black54)),
+                ],
+              ),
+            ),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                size: 16, color: Color(0xFF00E676)),
           ],
         ),
       ),

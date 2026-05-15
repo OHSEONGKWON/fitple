@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'profile_edit_screen.dart';
 import 'login_screen.dart';
+import 'workout_cert_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -11,7 +12,39 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  void _refreshProfile() => setState(() {});
+  int _totalPoints = 0;
+  int _streakCount = 0;
+  int _totalCertifications = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPoints();
+  }
+
+  void _refreshProfile() {
+    setState(() {});
+    _loadPoints();
+  }
+
+  Future<void> _loadPoints() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    try {
+      final data = await Supabase.instance.client
+          .from('user_points')
+          .select()
+          .eq('user_id', user.id)
+          .maybeSingle();
+      if (mounted) {
+        setState(() {
+          _totalPoints = (data?['total_points'] as int?) ?? 0;
+          _streakCount = (data?['streak_count'] as int?) ?? 0;
+          _totalCertifications = (data?['total_certifications'] as int?) ?? 0;
+        });
+      }
+    } catch (_) {}
+  }
 
   Future<void> _signOut(BuildContext context) async {
     try {
@@ -248,6 +281,77 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
           ],
 
+          const SizedBox(height: 20),
+
+          // 운동 기록
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('운동 기록',
+                    style: TextStyle(
+                        color: subTextColor,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600)),
+                GestureDetector(
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const WorkoutCertScreen()),
+                  ),
+                  child: const Text('출석 캘린더 보기',
+                      style: TextStyle(
+                          color: Color(0xFF00E676), fontSize: 12)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const WorkoutCertScreen()),
+            ),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  if (!isDarkMode)
+                    BoxShadow(
+                        color: Colors.grey.withValues(alpha: 0.08),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2)),
+                ],
+              ),
+              child: Row(
+                children: [
+                  _StatItem(
+                      emoji: '🔥',
+                      label: '연속 출석',
+                      value: '$_streakCount일',
+                      textColor: textColor,
+                      subColor: subTextColor),
+                  _StatItem(
+                      emoji: '⭐',
+                      label: '총 포인트',
+                      value: '$_totalPoints P',
+                      textColor: textColor,
+                      subColor: subTextColor),
+                  _StatItem(
+                      emoji: '💪',
+                      label: '총 운동일',
+                      value: '$_totalCertifications일',
+                      textColor: textColor,
+                      subColor: subTextColor),
+                ],
+              ),
+            ),
+          ),
+
           const SizedBox(height: 28),
 
           // 버튼들
@@ -309,6 +413,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
 
           const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatItem extends StatelessWidget {
+  final String emoji;
+  final String label;
+  final String value;
+  final Color textColor;
+  final Color subColor;
+
+  const _StatItem({
+    required this.emoji,
+    required this.label,
+    required this.value,
+    required this.textColor,
+    required this.subColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 22)),
+          const SizedBox(height: 6),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                  color: textColor)),
+          const SizedBox(height: 2),
+          Text(label,
+              style: TextStyle(fontSize: 11, color: subColor)),
         ],
       ),
     );

@@ -8,12 +8,14 @@ class ChatRoomScreen extends StatefulWidget {
   final String roomId;
   final String otherUserNickname;
   final String gatheringTitle;
+  final String? otherUserId;
 
   const ChatRoomScreen({
     super.key,
     required this.roomId,
     required this.otherUserNickname,
     required this.gatheringTitle,
+    this.otherUserId,
   });
 
   @override
@@ -31,6 +33,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   DateTime? _otherLastReadAt;
   Map<String, dynamic>? _replyToMessage;
   bool _isSendingImage = false;
+  bool _isSendingSchedule = false;
 
   @override
   void initState() {
@@ -191,6 +194,318 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
   }
 
+  String _formatScheduledAt(DateTime dt) {
+    const weekdays = ['월', '화', '수', '목', '금', '토', '일'];
+    final wd = weekdays[dt.weekday - 1];
+    final hour = dt.hour;
+    final ampm = hour < 12 ? '오전' : '오후';
+    final h = hour % 12 == 0 ? 12 : hour % 12;
+    final m = dt.minute.toString().padLeft(2, '0');
+    return '${dt.month}월 ${dt.day}일 ($wd) $ampm $h:$m';
+  }
+
+  Future<void> _proposeSchedule() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    final titleController = TextEditingController();
+    final locationController = TextEditingController();
+    DateTime? selectedDate;
+    TimeOfDay? selectedTime;
+
+    final confirmed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          final isDark = Theme.of(ctx).brightness == Brightness.dark;
+          final bgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+          final textColor = isDark ? Colors.white : Colors.black;
+          final fieldColor =
+              isDark ? const Color(0xFF2C2C2C) : Colors.grey[100]!;
+
+          return Padding(
+            padding:
+                EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+            child: Container(
+              decoration: BoxDecoration(
+                color: bgColor,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white24 : Colors.black12,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('일정 제안',
+                      style: TextStyle(
+                          color: textColor,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: titleController,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      hintText: '일정 제목 (예: 헬스장 같이가요)',
+                      hintStyle: TextStyle(
+                          color: isDark ? Colors.white38 : Colors.black38),
+                      filled: true,
+                      fillColor: fieldColor,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: ctx,
+                              initialDate: DateTime.now()
+                                  .add(const Duration(days: 1)),
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now()
+                                  .add(const Duration(days: 365)),
+                              builder: (_, child) => Theme(
+                                data: Theme.of(ctx).copyWith(
+                                  colorScheme: ColorScheme.fromSeed(
+                                      seedColor: const Color(0xFF00E676)),
+                                ),
+                                child: child!,
+                              ),
+                            );
+                            if (picked != null) {
+                              setSheet(() => selectedDate = picked);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: fieldColor,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.calendar_today,
+                                    size: 16, color: Color(0xFF00E676)),
+                                const SizedBox(width: 8),
+                                Text(
+                                  selectedDate == null
+                                      ? '날짜 선택'
+                                      : '${selectedDate!.month}/${selectedDate!.day}',
+                                  style: TextStyle(
+                                      color: textColor, fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () async {
+                            final picked = await showTimePicker(
+                              context: ctx,
+                              initialTime:
+                                  const TimeOfDay(hour: 10, minute: 0),
+                              builder: (_, child) => Theme(
+                                data: Theme.of(ctx).copyWith(
+                                  colorScheme: ColorScheme.fromSeed(
+                                      seedColor: const Color(0xFF00E676)),
+                                ),
+                                child: child!,
+                              ),
+                            );
+                            if (picked != null) {
+                              setSheet(() => selectedTime = picked);
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: fieldColor,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.access_time,
+                                    size: 16, color: Color(0xFF00E676)),
+                                const SizedBox(width: 8),
+                                Text(
+                                  selectedTime == null
+                                      ? '시간 선택'
+                                      : '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}',
+                                  style: TextStyle(
+                                      color: textColor, fontSize: 14),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: locationController,
+                    style: TextStyle(color: textColor),
+                    decoration: InputDecoration(
+                      hintText: '장소 (선택)',
+                      hintStyle: TextStyle(
+                          color: isDark ? Colors.white38 : Colors.black38),
+                      filled: true,
+                      fillColor: fieldColor,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      prefixIcon: const Icon(Icons.location_on_outlined,
+                          color: Color(0xFF00E676), size: 18),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (titleController.text.trim().isEmpty ||
+                            selectedDate == null ||
+                            selectedTime == null) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            const SnackBar(
+                                content:
+                                    Text('제목, 날짜, 시간을 모두 입력해주세요')),
+                          );
+                          return;
+                        }
+                        Navigator.pop(ctx, true);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00E676),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
+                      ),
+                      child: const Text('일정 제안 보내기',
+                          style: TextStyle(
+                              color: Colors.black,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    final savedTitle = titleController.text.trim();
+    final savedLocation = locationController.text.trim();
+    titleController.dispose();
+    locationController.dispose();
+
+    if (confirmed != true ||
+        selectedDate == null ||
+        selectedTime == null ||
+        savedTitle.isEmpty) {
+      return;
+    }
+
+    final scheduledAt = DateTime(
+      selectedDate!.year,
+      selectedDate!.month,
+      selectedDate!.day,
+      selectedTime!.hour,
+      selectedTime!.minute,
+    );
+
+    await _sendScheduleProposal(
+        savedTitle, scheduledAt, savedLocation.isEmpty ? null : savedLocation);
+  }
+
+  Future<void> _sendScheduleProposal(
+      String title, DateTime scheduledAt, String? location) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    if (_isSendingSchedule) return;
+
+    setState(() => _isSendingSchedule = true);
+    final myNickname =
+        user.userMetadata?['display_name'] as String? ?? '나';
+
+    try {
+      final scheduleData = await Supabase.instance.client
+          .from('schedules')
+          .insert({
+            'room_id': widget.roomId,
+            'proposer_id': user.id,
+            'proposer_nickname': myNickname,
+            if (widget.otherUserId != null) 'responder_id': widget.otherUserId,
+            'responder_nickname': widget.otherUserNickname,
+            'title': title,
+            'scheduled_at': scheduledAt.toUtc().toIso8601String(),
+            'location': location,
+            'status': 'pending',
+          })
+          .select()
+          .single();
+
+      final scheduleId = scheduleData['id'] as String;
+      final contentLines = [
+        title,
+        '📅 ${_formatScheduledAt(scheduledAt)}',
+        if (location != null) '📍 $location',
+      ];
+
+      await Supabase.instance.client.from('messages').insert({
+        'room_id': widget.roomId,
+        'sender_id': user.id,
+        'sender_nickname': myNickname,
+        'content': contentLines.join('\n'),
+        'message_type': 'schedule_proposal',
+        'schedule_id': scheduleId,
+        'schedule_status': 'pending',
+      });
+
+      if (_myRole != null) _updateLastReadAt(_myRole!);
+      _scrollToBottom();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('일정 전송 실패: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isSendingSchedule = false);
+    }
+  }
+
+
   void _scrollToBottom({bool animate = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -296,6 +611,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       if (msgTime != null) {
                         isRead = !_otherLastReadAt!.isBefore(msgTime);
                       }
+                    }
+
+                    // 일정 제안 버블
+                    if (msg['message_type'] == 'schedule_proposal') {
+                      return GestureDetector(
+                        onLongPress: () =>
+                            setState(() => _replyToMessage = msg),
+                        child: _ScheduleProposalBubble(
+                          message: msg,
+                          isMe: isMe,
+                          isDarkMode: isDarkMode,
+                        ),
+                      );
                     }
 
                     // 답장 원본 메시지의 닉네임 조회
@@ -424,6 +752,28 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                                   color: Color(0xFF00E676)),
                             )
                           : Icon(Icons.image_outlined,
+                              color: subTextColor, size: 20),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // 일정 제안 버튼
+                  GestureDetector(
+                    onTap: _isSendingSchedule ? null : _proposeSchedule,
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: inputBg,
+                        shape: BoxShape.circle,
+                      ),
+                      child: _isSendingSchedule
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF00E676)),
+                            )
+                          : Icon(Icons.calendar_month_outlined,
                               color: subTextColor, size: 20),
                     ),
                   ),
@@ -703,6 +1053,256 @@ class _MessageBubble extends StatelessWidget {
                 ],
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ScheduleProposalBubble extends StatefulWidget {
+  final Map<String, dynamic> message;
+  final bool isMe;
+  final bool isDarkMode;
+
+  const _ScheduleProposalBubble({
+    required this.message,
+    required this.isMe,
+    required this.isDarkMode,
+  });
+
+  @override
+  State<_ScheduleProposalBubble> createState() =>
+      _ScheduleProposalBubbleState();
+}
+
+class _ScheduleProposalBubbleState extends State<_ScheduleProposalBubble> {
+  late String _status;
+  bool _isUpdating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _status =
+        widget.message['schedule_status'] as String? ?? 'pending';
+  }
+
+  @override
+  void didUpdateWidget(_ScheduleProposalBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newStatus =
+        widget.message['schedule_status'] as String? ?? 'pending';
+    if (newStatus != _status && !_isUpdating) {
+      setState(() => _status = newStatus);
+    }
+  }
+
+  Future<void> _respond(String status) async {
+    final scheduleId = widget.message['schedule_id'] as String?;
+    if (scheduleId == null || _isUpdating) return;
+    setState(() => _isUpdating = true);
+    try {
+      await Supabase.instance.client
+          .from('schedules')
+          .update({'status': status}).eq('id', scheduleId);
+      if (mounted) setState(() { _status = status; _isUpdating = false; });
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUpdating = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('처리 실패: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final status = _status;
+    final isMe = widget.isMe;
+    final isDarkMode = widget.isDarkMode;
+    final content = widget.message['content'] as String? ?? '';
+    final senderNickname = widget.message['sender_nickname'] as String? ?? '';
+    final subColor = isDarkMode ? Colors.white38 : Colors.black38;
+
+    Color statusColor;
+    String statusText;
+    switch (status) {
+      case 'accepted':
+        statusColor = const Color(0xFF00E676);
+        statusText = '✓ 수락됨';
+      case 'declined':
+        statusColor = Colors.grey;
+        statusText = '✗ 거절됨';
+      default:
+        statusColor = Colors.orange;
+        statusText = '대기중';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (!isMe) ...[
+            CircleAvatar(
+              radius: 16,
+              backgroundColor:
+                  isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[300],
+              child: Icon(Icons.person,
+                  size: 18,
+                  color: isDarkMode ? Colors.white54 : Colors.black45),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Flexible(
+            child: Column(
+              crossAxisAlignment:
+                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              children: [
+                if (!isMe)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(senderNickname,
+                        style: TextStyle(
+                            color: subColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600)),
+                  ),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.75),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDarkMode
+                          ? const Color(0xFF2C2C2C)
+                          : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                          color: statusColor.withValues(alpha: 0.4),
+                          width: 1.5),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment:
+                              MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.calendar_month,
+                                    color: Color(0xFF00E676), size: 15),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '일정 제안',
+                                  style: TextStyle(
+                                    color: isDarkMode
+                                        ? Colors.white70
+                                        : Colors.black87,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color:
+                                    statusColor.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(statusText,
+                                  style: TextStyle(
+                                      color: statusColor,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          content,
+                          style: TextStyle(
+                            color: isDarkMode
+                                ? Colors.white
+                                : Colors.black87,
+                            fontSize: 13,
+                            height: 1.5,
+                          ),
+                        ),
+                        if (!isMe && status == 'pending') ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: _isUpdating
+                                      ? null
+                                      : () => _respond('declined'),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: isDarkMode
+                                          ? Colors.white10
+                                          : Colors.grey[200],
+                                      borderRadius:
+                                          BorderRadius.circular(8),
+                                    ),
+                                    child: Center(
+                                      child: Text('거절',
+                                          style: TextStyle(
+                                              color: isDarkMode
+                                                  ? Colors.white60
+                                                  : Colors.black54,
+                                              fontSize: 13,
+                                              fontWeight:
+                                                  FontWeight.w600)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: _isUpdating
+                                      ? null
+                                      : () => _respond('accepted'),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF00E676),
+                                      borderRadius:
+                                          BorderRadius.circular(8),
+                                    ),
+                                    child: const Center(
+                                      child: Text('수락',
+                                          style: TextStyle(
+                                              color: Colors.black,
+                                              fontSize: 13,
+                                              fontWeight:
+                                                  FontWeight.bold)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
