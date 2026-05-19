@@ -14,12 +14,20 @@ class MainHomeScreen extends StatefulWidget {
 class _MainHomeScreenState extends State<MainHomeScreen> {
   int _currentIndex = 0;
 
+  void changeTab(int index){
+    setState(() {
+      _currentIndex = index;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     final List<Widget> pages = [
-      const HomeScreen(),
+      HomeScreen(onNavigateToGather: () => changeTab(2),
+      onNavigateToCalendar:() => changeTab(1),
+      onNavigateToProfile:()=> changeTab(3)), //quickTile의 ontap 함수를 정의
       const CalendarScreen(),
       const GatherScreen(), //gatherscreen이랑 연결
       const ProfileScreen(),
@@ -29,6 +37,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       extendBody: true,
       backgroundColor: isDarkMode ? const Color(0xFF121212) : Colors.white,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: isDarkMode ? const Color(0xFF121212) : Colors.white,
         elevation: 0,
         titleSpacing: 20,

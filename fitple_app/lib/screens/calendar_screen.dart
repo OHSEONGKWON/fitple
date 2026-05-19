@@ -129,10 +129,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         backgroundColor: isDarkMode ? const Color(0xFF121212) : Colors.white,
         elevation: 0,
         title: Text(
-          '일정 캘린더',
+          '   일정 캘린더',
           style: TextStyle(
               color: textColor, fontWeight: FontWeight.bold, fontSize: 20),
         ),

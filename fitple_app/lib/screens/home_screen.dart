@@ -8,8 +8,17 @@ import 'story_show_screen.dart';
 import 'dart:typed_data';
 import 'workout_cert_screen.dart';
 
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+class HomeScreen extends StatefulWidget { //다른 창으로 바로 넘어갈 수 있도록 함수를 선언
+  final VoidCallback onNavigateToGather;
+  final VoidCallback onNavigateToCalendar;
+  final VoidCallback onNavigateToProfile;
+
+  const HomeScreen({
+    super.key,
+    required this.onNavigateToGather,
+    required this.onNavigateToCalendar,
+    required this.onNavigateToProfile,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -406,8 +415,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: '모집 탐색',
                     color: Colors.blueAccent,
                     isDarkMode: isDarkMode,
-                    onTap: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const GatherScreen())),
+                    onTap: widget.onNavigateToGather,
                   ),
                   const SizedBox(width: 12),
                   _QuickTile(
