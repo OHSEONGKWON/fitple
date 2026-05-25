@@ -144,8 +144,8 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                   label: '일정',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.add_outlined),
-                  label: '모집',
+                  icon: Icon(Icons.directions_run_outlined),
+                  label: '참여/모집',
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.person_outline),
