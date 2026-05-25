@@ -3,6 +3,7 @@ import 'profile_screen.dart';
 import 'home_screen.dart';
 import 'gather_screen.dart';
 import 'calendar_screen.dart';
+import 'chat_list_screen.dart';
 
 class MainHomeScreen extends StatefulWidget {
   const MainHomeScreen({super.key});
@@ -74,6 +75,20 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
         ),
         actions: [
           IconButton(
+            onPressed: () {
+              Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const ChatListScreen()),
+              );
+            },
+            icon: Icon(
+              Icons.chat_bubble_outline,
+              color: isDarkMode ? Colors.white : Colors.black,
+              size: 28,
+            ),
+          ),
+          IconButton(
             onPressed: () {},
             icon: Icon(
               Icons.notifications_none_rounded,
@@ -82,7 +97,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
             ),
           ),
           const SizedBox(width: 10),
-        ],
+        ],//actions
       ),
       body: SafeArea(child: pages[_currentIndex]),
       bottomNavigationBar: SafeArea(

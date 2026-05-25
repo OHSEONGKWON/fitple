@@ -169,234 +169,278 @@ class _GatherScreenState extends State<GatherScreen> {
       return matchCat && matchSearch;
     }).toList();
 
-    return SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 새로운 크루 모집하기
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF00E676).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF00E676).withValues(alpha: 0.3)),
-                        ),
-                        child: const Icon(Icons.people_alt_outlined, color: Color(0xFF00E676), size: 28),
+    return Stack(
+      children: [
+        SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // 새로운 크루 모집하기
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        //color: cardColor, 박스 살리고 싶음 이거 지우면 됨
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('새로운 크루 모집하기',
-                                style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
-                            const SizedBox(height: 4),
-                            Text('함께 땀 흘릴 메이트를 찾아보세요',
-                                style: TextStyle(color: subTextColor, fontSize: 13)),
-                          ],
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00E676).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFF00E676).withValues(alpha: 0.3)),
+                            ),
+                            child: const Icon(Icons.people_alt_outlined, color: Color(0xFF00E676), size: 28),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('새로운 크루 모집하기',
+                                    style: TextStyle(color: textColor, fontSize: 18, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 4),
+                                Text('함께 땀 흘릴 메이트를 찾아보세요',
+                                    style: TextStyle(color: subTextColor, fontSize: 13)),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () async {
+                              final result = await Navigator.push<bool>(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const GatherEditScreen(),
+                                  fullscreenDialog: true,
+                                ),
+                              );
+                              if (result == true) _loadGatherings();
+                            },
+                            icon: const Icon(Icons.add_circle_outlined),
+                            iconSize: 35,
+                            color: const Color(0xFF00E676).withValues(alpha: 0.7),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+            
+                    // 검색바
+                    Container(
+                      decoration: BoxDecoration(
+                        color: cardColor,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (v) => setState(() => _searchQuery = v.trim()),
+                        style: TextStyle(color: textColor, fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: '모집글 검색...',
+                          hintStyle: TextStyle(color: subTextColor),
+                          prefixIcon: Icon(Icons.search, color: subTextColor, size: 20),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: Icon(Icons.clear, color: subTextColor, size: 18),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() => _searchQuery = '');
+                                  },
+                                )
+                              : null,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                       ),
-                      IconButton(
-                        onPressed: () async {
-                          final result = await Navigator.push<bool>(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const GatherEditScreen(),
-                              fullscreenDialog: true,
+                    ),
+                    const SizedBox(height: 12),
+            
+                    // 카테고리 필터 칩
+                    SizedBox(
+                      height: 36,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: _categories.map((cat) {
+                          final isSelected = _selectedCategory == cat;
+                          return GestureDetector(
+                            onTap: () => setState(() => _selectedCategory = cat),
+                            child: Container(
+                              margin: const EdgeInsets.only(right: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: isSelected ? const Color(0xFF00E676) : cardColor,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? const Color(0xFF00E676)
+                                      : (isDarkMode ? Colors.white24 : Colors.black12),
+                                ),
+                              ),
+                              child: Text(
+                                cat,
+                                style: TextStyle(
+                                  color: isSelected ? Colors.black : subTextColor,
+                                  fontSize: 13,
+                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
                             ),
                           );
-                          if (result == true) _loadGatherings();
-                        },
-                        icon: const Icon(Icons.add_circle_outlined),
-                        iconSize: 35,
-                        color: const Color(0xFF00E676).withValues(alpha: 0.7),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-        
-                // 검색바
-                Container(
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: TextField(
-                    controller: _searchController,
-                    onChanged: (v) => setState(() => _searchQuery = v.trim()),
-                    style: TextStyle(color: textColor, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: '모집글 검색...',
-                      hintStyle: TextStyle(color: subTextColor),
-                      prefixIcon: Icon(Icons.search, color: subTextColor, size: 20),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: Icon(Icons.clear, color: subTextColor, size: 18),
-                              onPressed: () {
-                                _searchController.clear();
-                                setState(() => _searchQuery = '');
-                              },
-                            )
-                          : null,
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-        
-                // 카테고리 필터 칩
-                SizedBox(
-                  height: 36,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: _categories.map((cat) {
-                      final isSelected = _selectedCategory == cat;
-                      return GestureDetector(
-                        onTap: () => setState(() => _selectedCategory = cat),
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: isSelected ? const Color(0xFF00E676) : cardColor,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: isSelected
-                                  ? const Color(0xFF00E676)
-                                  : (isDarkMode ? Colors.white24 : Colors.black12),
-                            ),
-                          ),
-                          child: Text(
-                            cat,
-                            style: TextStyle(
-                              color: isSelected ? Colors.black : subTextColor,
-                              fontSize: 13,
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            ),
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ),
-                const SizedBox(height: 20),
-        
-                // 실시간 모집 헤더
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('실시간 모집 ✨',
-                        style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.bold)),
-                    PopupMenuButton<String>(
-                      color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      position: PopupMenuPosition.under,
-                      onSelected: (value) {
-                        setState(() => _currentSort = value);
-                        _loadGatherings();
-                      },
-                      itemBuilder: (ctx) => ['최신순', '오래된순', '인기순', 'A-Z 순'].map((choice) {
-                        return PopupMenuItem<String>(
-                          value: choice,
-                          child: Text(
-                            choice,
-                            style: TextStyle(
-                              color: _currentSort == choice ? const Color(0xFF00E676) : textColor,
-                              fontWeight: _currentSort == choice ? FontWeight.bold : FontWeight.normal,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Text(_currentSort, style: TextStyle(color: subTextColor, fontSize: 13)),
-                            const SizedBox(width: 4),
-                            Icon(Icons.keyboard_arrow_down, color: subTextColor, size: 16),
-                          ],
-                        ),
+                        }).toList(),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 15),
-        
-                // 모집 리스트
-                if (_isLoading)
-                  const Center(child: CircularProgressIndicator(color: Color(0xFF00E676)))
-                else if (filtered.isEmpty)
-                  Center(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 40),
-                      child: Text(
-                        _gatherings.isEmpty
-                            ? '아직 모집글이 없어요.\n첫 번째로 크루를 모집해보세요! 🏃'
-                            : '검색 결과가 없어요.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: subTextColor, fontSize: 15, height: 1.6),
-                      ),
-                    ),
-                  )
-                else
-                  ...filtered.map((g) => Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: RecruitmentCard(
-                          isDarkMode: isDarkMode,
-                          accentColor: _categoryColor(g['category'] ?? '기타'),
-                          category: g['category'] ?? '기타',
-                          timeAgo: _formatTimeAgo(
-                              g['created_at'] ?? DateTime.now().toIso8601String()),
-                          currentMembers: (g['current_members'] ?? 0) as int,
-                          maxMembers: (g['max_members'] ?? 1) as int,
-                          isClosed: (g['is_closed'] ?? false) as bool,
-                          title: g['title'] ?? '',
-                          description: g['description'] ?? '',
-                          gatherDate: _formatDateRange(g['gather_start'], g['gather_end']),
-                          userName: g['user_nickname'] ?? '알 수 없음',
-                          userScore: '',
-                          userBadge: '',
-                          extraInfoIcon: Icons.location_on_outlined,
-                          extraInfoText: _displayLocation(g['location']),
-                          gatheringId: g['id'],
-                          authorId: g['user_id'],
-                          hostNickname: g['user_nickname'] ?? '익명',
-                          gatheringTitle: g['title'] ?? '',
-                          onEdit: () async {
-                            final result = await Navigator.push<bool>(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => GatherEditScreen(initialData: g),
-                                fullscreenDialog: true,
+                    const SizedBox(height: 20),
+            
+                    // 실시간 모집 헤더
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('실시간 모집 ✨',
+                            style: TextStyle(color: textColor, fontSize: 22, fontWeight: FontWeight.bold)),
+                        PopupMenuButton<String>(
+                          color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          position: PopupMenuPosition.under,
+                          onSelected: (value) {
+                            setState(() => _currentSort = value);
+                            _loadGatherings();
+                          },
+                          itemBuilder: (ctx) => ['최신순', '오래된순', '인기순', 'A-Z 순'].map((choice) {
+                            return PopupMenuItem<String>(
+                              value: choice,
+                              child: Text(
+                                choice,
+                                style: TextStyle(
+                                  color: _currentSort == choice ? const Color(0xFF00E676) : textColor,
+                                  fontWeight: _currentSort == choice ? FontWeight.bold : FontWeight.normal,
+                                ),
                               ),
                             );
-                            if (result == true) _loadGatherings();
-                          },
-                          onDelete: () => _deleteGathering(g['id']),
-                          onToggleClosed: () =>
-                              _toggleClosed(g['id'], (g['is_closed'] ?? false) as bool),
+                          }).toList(),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(_currentSort, style: TextStyle(color: subTextColor, fontSize: 13)),
+                                const SizedBox(width: 4),
+                                Icon(Icons.keyboard_arrow_down, color: subTextColor, size: 16),
+                              ],
+                            ),
+                          ),
                         ),
-                      )),
-                const SizedBox(height: 100),
-              ],
+                      ],
+                    ),
+                    const SizedBox(height: 15),
+            
+                    // 모집 리스트
+                    if (_isLoading)
+                      const Center(child: CircularProgressIndicator(color: Color(0xFF00E676)))
+                    else if (filtered.isEmpty)
+                      Center(
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 40),
+                          child: Text(
+                            _gatherings.isEmpty
+                                ? '아직 모집글이 없어요.\n첫 번째로 크루를 모집해보세요! 🏃'
+                                : '검색 결과가 없어요.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: subTextColor, fontSize: 15, height: 1.6),
+                          ),
+                        ),
+                      )
+                    else
+                      ...filtered.map((g) => Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+                            child: RecruitmentCard(
+                              isDarkMode: isDarkMode,
+                              accentColor: _categoryColor(g['category'] ?? '기타'),
+                              category: g['category'] ?? '기타',
+                              timeAgo: _formatTimeAgo(
+                                  g['created_at'] ?? DateTime.now().toIso8601String()),
+                              currentMembers: (g['current_members'] ?? 0) as int,
+                              maxMembers: (g['max_members'] ?? 1) as int,
+                              isClosed: (g['is_closed'] ?? false) as bool,
+                              title: g['title'] ?? '',
+                              description: g['description'] ?? '',
+                              gatherDate: _formatDateRange(g['gather_start'], g['gather_end']),
+                              userName: g['user_nickname'] ?? '알 수 없음',
+                              userScore: '',
+                              userBadge: '',
+                              extraInfoIcon: Icons.location_on_outlined,
+                              extraInfoText: _displayLocation(g['location']),
+                              gatheringId: g['id'],
+                              authorId: g['user_id'],
+                              hostNickname: g['user_nickname'] ?? '익명',
+                              gatheringTitle: g['title'] ?? '',
+                              onEdit: () async {
+                                final result = await Navigator.push<bool>(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => GatherEditScreen(initialData: g),
+                                    fullscreenDialog: true,
+                                  ),
+                                );
+                                if (result == true) _loadGatherings();
+                              },
+                              onDelete: () => _deleteGathering(g['id']),
+                              onToggleClosed: () =>
+                                  _toggleClosed(g['id'], (g['is_closed'] ?? false) as bool),
+                            ),
+                          )),
+                    const SizedBox(height: 100),
+                  ],
+                ),
+              ),
+            ),
+          Positioned(
+        bottom: 12, 
+        right: 20,  
+        child: SizedBox(
+          height: 45,
+          child: FloatingActionButton.extended(
+            onPressed: () async {
+              final result = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const GatherEditScreen(),
+                  fullscreenDialog: true,
+                ),
+              );
+              if (result == true) _loadGatherings();
+            },
+            
+            // 디자인 커스텀 (당근마켓 스타일 + Fitple 브랜드 컬러)
+            backgroundColor: const Color(0xFF00E676), // Fitple 시그니처 초록색
+            foregroundColor: Colors.black,            // 글자 및 아이콘 색상 (검은색/어두운색 추천)
+            elevation: 6,                             
+            
+            // 테두리를 당근마켓처럼 길쭉한 타원형(Capsule) 모양으로 만들기
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30),
+            ),
+            
+            // 아이콘과 텍스트 구성
+            icon: const Icon(Icons.add, size: 22, fontWeight: FontWeight.bold),
+            label: const Text(
+              "모집하기",
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.5, // 자간을 살짝 좁혀서 더 트렌디하게
+              ),
             ),
           ),
-        );
+        ),
+      ),
+      ],
+    );
   }
 }
 
@@ -813,87 +857,180 @@ class _RecruitmentCardState extends State<RecruitmentCard>
                                             fontWeight: FontWeight.bold)),
                                   ),
                                 )
-                              : ElevatedButton.icon(
-                                  onPressed: () async {
-                                    final currentUser = Supabase
-                                        .instance.client.auth.currentUser;
-                                    if (currentUser == null) return;
-                                    try {
-                                      final existing =
-                                          await Supabase.instance.client
-                                              .from('chat_rooms')
-                                              .select()
-                                              .eq('gathering_id',
-                                                  widget.gatheringId)
-                                              .eq('guest_id', currentUser.id)
-                                              .maybeSingle();
-
-                                      String roomId;
-                                      if (existing != null) {
-                                        roomId = existing['id'];
-                                      } else {
-                                        final created = await Supabase
-                                            .instance.client
-                                            .from('chat_rooms')
-                                            .insert({
-                                              'gathering_id':
-                                                  widget.gatheringId,
-                                              'gathering_title':
-                                                  widget.gatheringTitle,
-                                              'host_id': widget.authorId,
-                                              'host_nickname':
-                                                  widget.hostNickname,
-                                              'guest_id': currentUser.id,
-                                              'guest_nickname': currentUser
-                                                      .userMetadata?[
-                                                          'display_name'] ??
-                                                  currentUser.email ??
-                                                  '익명',
-                                            })
-                                            .select()
-                                            .single();
-                                        roomId = created['id'];
-                                      }
-                                      if (!context.mounted) return;
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => ChatRoomScreen(
-                                            roomId: roomId,
-                                            otherUserNickname:
-                                                widget.hostNickname,
-                                            gatheringTitle:
-                                                widget.gatheringTitle,
-                                          ),
+                              : Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.max,
+                                children: [
+                                  Expanded(
+                                    child: ElevatedButton.icon(
+                                        onPressed: () async {
+                                          final currentUser = Supabase
+                                              .instance.client.auth.currentUser;
+                                          if (currentUser == null) return;
+                                          try {
+                                            final existing =
+                                                await Supabase.instance.client
+                                                    .from('chat_rooms')
+                                                    .select()
+                                                    .eq('gathering_id',
+                                                        widget.gatheringId)
+                                                    .eq('guest_id', currentUser.id)
+                                                    .maybeSingle();
+                                    
+                                            String roomId;
+                                            if (existing != null) {
+                                              roomId = existing['id'];
+                                            } else {
+                                              final created = await Supabase
+                                                  .instance.client
+                                                  .from('chat_rooms')
+                                                  .insert({
+                                                    'gathering_id':
+                                                        widget.gatheringId,
+                                                    'gathering_title':
+                                                        widget.gatheringTitle,
+                                                    'host_id': widget.authorId,
+                                                    'host_nickname':
+                                                        widget.hostNickname,
+                                                    'guest_id': currentUser.id,
+                                                    'guest_nickname': currentUser
+                                                            .userMetadata?[
+                                                                'display_name'] ??
+                                                        currentUser.email ??
+                                                        '익명',
+                                                  })
+                                                  .select()
+                                                  .single();
+                                              roomId = created['id'];
+                                            }
+                                            if (!context.mounted) return;
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (context) => ChatRoomScreen(
+                                                  roomId: roomId,
+                                                  otherUserNickname:
+                                                      widget.hostNickname,
+                                                  gatheringTitle:
+                                                      widget.gatheringTitle,
+                                                ),
+                                              ),
+                                            );
+                                          } catch (e) {
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(SnackBar(
+                                                      content: Text(
+                                                          '채팅 시작 실패: $e')));
+                                            }
+                                          }
+                                        },
+                                        icon: const Icon(
+                                            Icons.chat_bubble_outline,
+                                            size: 18,
+                                            color: Colors.black),
+                                        label: const Text('팀장과 채팅하기',
+                                            style: TextStyle(
+                                                color: Colors.black,
+                                                fontWeight: FontWeight.bold)),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFF00E676),
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(12)),
+                                          padding: const EdgeInsets.symmetric(
+                                              vertical: 12),
                                         ),
-                                      );
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(SnackBar(
-                                                content: Text(
-                                                    '채팅 시작 실패: $e')));
+                                      ),
+                                  ),
+                                  const SizedBox(width: 12,),
+                                  //1:1채팅, 단체채팅 나누기
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                      onPressed: () async {
+                                      final currentUser = Supabase
+                                          .instance.client.auth.currentUser;
+                                      if (currentUser == null) return;
+                                      try {
+                                        final existing =
+                                            await Supabase.instance.client
+                                                .from('chat_rooms')
+                                                .select()
+                                                .eq('gathering_id',
+                                                    widget.gatheringId)
+                                                .eq('guest_id', currentUser.id)
+                                                .maybeSingle();
+                                      
+                                        String roomId;
+                                        if (existing != null) {
+                                          roomId = existing['id'];
+                                        } else {
+                                          final created = await Supabase
+                                              .instance.client
+                                              .from('chat_rooms')
+                                              .insert({
+                                                'gathering_id':
+                                                    widget.gatheringId,
+                                                'gathering_title':
+                                                    widget.gatheringTitle,
+                                                'host_id': widget.authorId,
+                                                'host_nickname':
+                                                    widget.hostNickname,
+                                                'guest_id': currentUser.id,
+                                                'guest_nickname': currentUser
+                                                        .userMetadata?[
+                                                            'display_name'] ??
+                                                    currentUser.email ??
+                                                    '익명',
+                                              })
+                                              .select()
+                                              .single();
+                                          roomId = created['id'];
+                                        }
+                                        if (!context.mounted) return;
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => ChatRoomScreen(
+                                              roomId: roomId,
+                                              otherUserNickname:
+                                                  widget.hostNickname,
+                                              gatheringTitle:
+                                                  widget.gatheringTitle,
+                                            ),
+                                          ),
+                                        );
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(SnackBar(
+                                                  content: Text(
+                                                      '채팅 시작 실패: $e')));
+                                        }
                                       }
-                                    }
-                                  },
-                                  icon: const Icon(
-                                      Icons.chat_bubble_outline,
+                                    },
+                                      icon: const Icon(
+                                      Icons.forum_outlined,
                                       size: 18,
                                       color: Colors.black),
-                                  label: const Text('채팅하기',
+                                      label: const Text('팀 채팅하기',
                                       style: TextStyle(
-                                          color: Colors.black,
-                                          fontWeight: FontWeight.bold)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF00E676),
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(12)),
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                  ),
-                                ),
+                                      color: Colors.black,
+                                        fontWeight: FontWeight.bold)),
+                                        style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF00E676),
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12)),
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 12),
+                                                                        ),
+                                                                      ),
+                                    ),
+                                ],
+                              ),
                         ),
                       ),
                   ],
