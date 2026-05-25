@@ -322,7 +322,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           Text(
                             '내 스토리',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 13,
                               color: isDarkMode ? Colors.white70 : Colors.black87,
                             ),
                           ),
@@ -402,7 +402,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Text('빠른 메뉴',
                   style: TextStyle(
                       color: textColor,
-                      fontSize: 17,
+                      fontSize: 19,
                       fontWeight: FontWeight.bold)),
             ),
             const SizedBox(height: 12),
@@ -447,7 +447,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 18),
 
             // 오운완 인증 배너
             Padding(
@@ -467,7 +467,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            const SizedBox(height: 28),
+            const SizedBox(height: 35),
 
             // 최근 모집
             Padding(
@@ -478,7 +478,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text('최근 모집 ✨',
                       style: TextStyle(
                           color: textColor,
-                          fontSize: 17,
+                          fontSize: 19,
                           fontWeight: FontWeight.bold)),
                   GestureDetector(
                     onTap: () => Navigator.push(context,
@@ -520,7 +520,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: cardColor,
                         borderRadius: BorderRadius.circular(16),
                         border:
-                            Border(left: BorderSide(color: accent, width: 4)),
+                            Border(left: BorderSide(color: accent, width: 5)),
                         boxShadow: [
                           if (!isDarkMode)
                             BoxShadow(
@@ -571,7 +571,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               minHeight: 5,
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 8),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -673,7 +673,7 @@ class _WorkoutBanner extends StatelessWidget {
         child: Row(
           children: [
             const Text('💪', style: TextStyle(fontSize: 28)),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

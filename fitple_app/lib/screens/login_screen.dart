@@ -27,7 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Stack(
         children: [
           _buildBackgroundGlow(
-            top: -50,
+            top: -60,
             left: -100,
             color: Colors.deepPurpleAccent.withValues(alpha: 0.3),
           ),
@@ -54,16 +54,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             Text(
                               'Fitple',
                               style: TextStyle(
-                                fontSize: 60,
+                                fontSize: 70,
                                 fontWeight: FontWeight.w900,
                                 color: isDarkMode ? Colors.white : Colors.black,
                                 height: 1.1,
-                                letterSpacing: 0.5,
+                                letterSpacing: 1.5,
                               ),
                             ),
                             const SizedBox(height: 15),
                             Text(
-                              '우리 동네에서 함께 땀 흘릴\n메이트를 지금 바로 찾아보세요.',
+                              '우리 동네에서 함께 땀 흘릴 메이트를\n지금 바로 찾아보세요.',
                               style: TextStyle(
                                 fontSize: 16,
                                 color: isDarkMode
@@ -75,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             const Spacer(),
                             SizedBox(
                               width: double.infinity,
-                              height: 65,
+                              height: 70,
                               child: ElevatedButton(
                                 onPressed: () =>
                                     _showLoginModal(context, isDarkMode),
@@ -90,7 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: const Text(
                                   '시작하기',
                                   style: TextStyle(
-                                    fontSize: 22,
+                                    fontSize: 25,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -124,8 +124,8 @@ class _LoginScreenState extends State<LoginScreen> {
       bottom: bottom,
       right: right,
       child: Container(
-        width: 300,
-        height: 300,
+        width: 350,
+        height: 350,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: RadialGradient(colors: [color, Colors.transparent]),
@@ -172,7 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   Text(
                     'Fitple 로그인',
                     style: TextStyle(
-                      fontSize: 24,
+                      fontSize: 25,
                       fontWeight: FontWeight.bold,
                       color: isDarkMode ? Colors.white : Colors.black,
                     ),
@@ -214,29 +214,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           );
                         } catch (e) {
                           if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text(
-                                '로그인 실패: 가입되지 않은 아이디이거나 비밀번호가 틀렸습니다.',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              backgroundColor: Colors.red,
-                              behavior: SnackBarBehavior.floating,
-                              margin: EdgeInsets.fromLTRB(
-                                16,
-                                0,
-                                16,
-                                MediaQuery.of(context).size.height - 120,
-                              ),
-                              dismissDirection: DismissDirection.up,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              duration: const Duration(seconds: 3),
-                            ),
+                          _showTopNotification(
+                            context,
+                            '로그인 실패 : 가입되지 않은 아이디이거나 비밀번호가 틀렸습니다.',
+                            Colors.red,
+                            Colors.white,
                           );
                         }
                       },
@@ -251,7 +233,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: const Text(
                         '로그인',
                         style: TextStyle(
-                          fontSize: 18,
+                          fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -359,56 +341,21 @@ class _LoginScreenState extends State<LoginScreen> {
                           );
                           if (!context.mounted) return;
                           Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text(
-                                '회원가입이 완료되었습니다. 로그인을 진행해주세요.',
-                                style: TextStyle(
-                                  color: Colors.black,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              backgroundColor: const Color(0xFF00E676),
-                              behavior: SnackBarBehavior.floating,
-                              margin: EdgeInsets.fromLTRB(
-                                16,
-                                0,
-                                16,
-                                MediaQuery.of(context).size.height - 56,
-                              ),
-                              dismissDirection: DismissDirection.up,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              duration: const Duration(seconds: 3),
-                            ),
+                          _showTopNotification(
+                            context,
+                            '회원가입이 완료되었습니다. 로그인을 진행해주세요.',
+                            const Color(0xFF00E676),
+                            Colors.black,
                           );
+                          if (!context.mounted) return;
                           _showLoginModal(context, isDarkMode);
                         } catch (e) {
                           if (!context.mounted) return;
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: const Text(
-                                '회원가입 실패: 이메일 형식이 틀렸거나 이미 가입된 계정입니다.',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              backgroundColor: Colors.red,
-                              behavior: SnackBarBehavior.floating,
-                              margin: EdgeInsets.fromLTRB(
-                                16,
-                                0,
-                                16,
-                                MediaQuery.of(context).size.height - 120,
-                              ),
-                              dismissDirection: DismissDirection.up,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              duration: const Duration(seconds: 3),
-                            ),
+                          _showTopNotification(
+                            context,
+                            '회원가입 실패: 이메일 형식이 틀렸거나 이미 가입된 계정입니다.',
+                            Colors.red,
+                            Colors.white,
                           );
                         }
                       },
@@ -557,5 +504,54 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       ),
     );
+  }
+
+  void _showTopNotification(
+    BuildContext context,
+    String message,
+    Color backgroundColor,
+    Color textColor,
+  ) {
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: 60,
+        left: 16,
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: const [
+                BoxShadow(
+                  color: Colors.black26,
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              message,
+              style: TextStyle(
+                color: textColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(entry);
+    Future.delayed(const Duration(seconds: 3), () {
+      if (entry.mounted) {
+        entry.remove();
+      }
+    });
   }
 }

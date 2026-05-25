@@ -14,7 +14,7 @@ class MainHomeScreen extends StatefulWidget {
 class _MainHomeScreenState extends State<MainHomeScreen> {
   int _currentIndex = 0;
 
-  void changeTab(int index){
+  void changeTab(int index) {
     setState(() {
       _currentIndex = index;
     });
@@ -25,11 +25,13 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     final List<Widget> pages = [
-      HomeScreen(onNavigateToGather: () => changeTab(2),
-      onNavigateToCalendar:() => changeTab(1),
-      onNavigateToProfile:()=> changeTab(3)), //quickTile의 ontap 함수를 정의
+      HomeScreen(
+        onNavigateToGather: () => changeTab(2),
+        onNavigateToCalendar: () => changeTab(1),
+        onNavigateToProfile: () => changeTab(3),
+      ),
       const CalendarScreen(),
-      const GatherScreen(), //gatherscreen이랑 연결
+      const GatherScreen(),
       const ProfileScreen(),
     ];
 
@@ -63,15 +65,14 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                 style: TextStyle(
                   color: isDarkMode ? Colors.white : Colors.black,
                   fontWeight: FontWeight.bold,
-                  fontSize: 22,
-                  letterSpacing: -0.5,
+                  fontSize: 28,
+                  letterSpacing: 0.2,
                 ),
               ),
             ],
           ),
         ),
         actions: [
-          const SizedBox(width: 0),
           IconButton(
             onPressed: () {},
             icon: Icon(
@@ -87,6 +88,7 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
       bottomNavigationBar: SafeArea(
         child: Container(
           margin: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
+          padding: const EdgeInsets.symmetric(vertical: 6),
           decoration: BoxDecoration(
             color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
             borderRadius: BorderRadius.circular(30),
@@ -114,9 +116,9 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                   : Colors.black45,
               showSelectedLabels: true,
               showUnselectedLabels: true,
-              selectedFontSize: 12,
-              unselectedFontSize: 12,
-              iconSize: 26,
+              selectedFontSize: 14,
+              unselectedFontSize: 13,
+              iconSize: 28,
               items: const [
                 BottomNavigationBarItem(
                   icon: Icon(Icons.home_filled),
@@ -124,10 +126,12 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.calendar_month_outlined),
-                  label: '일정'),
+                  label: '일정',
+                ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.add_outlined),
-                  label: '모집'),
+                  label: '모집',
+                ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.person_outline),
                   label: '프로필',
