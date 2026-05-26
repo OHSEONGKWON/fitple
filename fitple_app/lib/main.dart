@@ -1,10 +1,16 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/splash_screen.dart';
 import 'services/notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (!kIsWeb) {
+    await FlutterNaverMap().init(clientId: '6nqz044aws');
+  }
 
   await Supabase.initialize(
     url: 'https://qfppujcxpzncjufxbpvx.supabase.co',

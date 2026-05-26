@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'map_picker_screen.dart';
 
 class GatherEditScreen extends StatefulWidget {
@@ -22,7 +22,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
   // 2. 선택 상태 변수들
   String _selectedCategory = '축구'; // 기본 선택 종목
   DateTimeRange? _selectedDateRange; // 모집 날짜 범위
-  LatLng? _pickedLatLng; // 지도에서 선택한 좌표
+  NLatLng? _pickedLatLng; // 지도에서 선택한 좌표
 
   @override
   void initState() {
@@ -61,7 +61,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
     );
     if (result != null) {
       setState(() {
-        _pickedLatLng = result['latLng'] as LatLng?;
+        _pickedLatLng = result['latLng'] as NLatLng?;
         final address = result['address'] as String? ?? '';
         if (address.isNotEmpty) {
           _locationController.text = address;
