@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:http/http.dart' as http;
@@ -100,7 +101,21 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
             ),
         ],
       ),
-      body: Stack(
+      body: kIsWeb
+          ? const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.map_outlined, size: 64, color: Colors.grey),
+                  SizedBox(height: 16),
+                  Text(
+                    '지도 기능은 모바일 앱에서 이용해주세요',
+                    style: TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
+                ],
+              ),
+            )
+          : Stack(
         children: [
           NaverMap(
             options: NaverMapViewOptions(
@@ -246,6 +261,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
       ),
     );
   }
+
 
   Future<void> _updateMarker(NLatLng latLng) async {
     if (_mapController == null) return;

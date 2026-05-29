@@ -193,7 +193,7 @@ class _StoryViewScreenState extends State<StoryViewScreen>
                     child: CircularProgressIndicator(color: Colors.white),
                   );
                 },
-                errorBuilder: (_, __, ___) => const Center(
+                errorBuilder: (context, error, _) => const Center(
                   child: Icon(Icons.broken_image, color: Colors.white54, size: 64),
                 ),
               ),
@@ -244,7 +244,7 @@ class _StoryViewScreenState extends State<StoryViewScreen>
                           : i == _currentIndex
                               ? AnimatedBuilder(
                                   animation: _progressController,
-                                  builder: (_, __) => LinearProgressIndicator(
+                                  builder: (context, _) => LinearProgressIndicator(
                                     value: _progressController.value,
                                     backgroundColor: Colors.white30,
                                     valueColor:

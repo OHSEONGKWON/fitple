@@ -95,10 +95,14 @@ class _WorkoutCertScreenState extends State<WorkoutCertScreen> {
           .uploadBinary(fileName, bytes,
               fileOptions: const FileOptions(upsert: true));
 
+      final nickname = user.userMetadata?['display_name'] as String? ??
+          user.email?.split('@').first ??
+          '사용자';
       await Supabase.instance.client.from('workout_certifications').insert({
         'user_id': user.id,
         'image_url': fileName,
         'cert_date': _todayStr,
+        'user_nickname': nickname,
       });
 
       final pointsRecord = await Supabase.instance.client

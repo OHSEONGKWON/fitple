@@ -18,11 +18,14 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
   late TextEditingController _locationController;
   late TextEditingController _minMembersController;
   late TextEditingController _maxMembersController;
+  late TextEditingController _currentMembersController;
 
   // 2. 선택 상태 변수들
   String _selectedCategory = '축구'; // 기본 선택 종목
   DateTimeRange? _selectedDateRange; // 모집 날짜 범위
   NLatLng? _pickedLatLng; // 지도에서 선택한 좌표
+  int _actualParticipantCount = 1;
+  bool _isLoadingParticipantFloor = false;
 
   @override
   void initState() {
@@ -33,12 +36,16 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
     _locationController = TextEditingController(text: d?['location'] ?? '');
     _minMembersController = TextEditingController(text: d?['min_members']?.toString() ?? '');
     _maxMembersController = TextEditingController(text: d?['max_members']?.toString() ?? '');
+    _currentMembersController = TextEditingController(text: d?['current_members']?.toString() ?? '1');
     _selectedCategory = d?['category'] ?? '축구';
     if (d != null && d['gather_start'] != null && d['gather_end'] != null) {
       _selectedDateRange = DateTimeRange(
         start: DateTime.parse(d['gather_start']),
         end: DateTime.parse(d['gather_end']),
       );
+    }
+    if (d != null) {
+      _loadActualParticipantCount();
     }
   }
 
@@ -49,6 +56,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
     _locationController.dispose();
     _minMembersController.dispose();
     _maxMembersController.dispose();
+    _currentMembersController.dispose();
     super.dispose();
   }
 
@@ -68,6 +76,73 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
         }
       });
     }
+  }
+
+  int _parseControllerInt(TextEditingController controller, int fallback) {
+    return int.tryParse(controller.text.trim()) ?? fallback;
+  }
+
+  Future<int> _fetchActualParticipantCount() async {
+    final gatheringId = widget.initialData?['id'];
+    if (gatheringId == null) return 1;
+
+    final rows = await Supabase.instance.client
+        .from('chat_rooms')
+        .select('guest_id')
+        .eq('gathering_id', gatheringId);
+
+    final guests = <String>{};
+    for (final row in rows) {
+      final guestId = (row['guest_id'] ?? '').toString();
+      if (guestId.isNotEmpty) {
+        guests.add(guestId);
+      }
+    }
+    return 1 + guests.length;
+  }
+
+  Future<void> _loadActualParticipantCount() async {
+    setState(() => _isLoadingParticipantFloor = true);
+    try {
+      final actualCount = await _fetchActualParticipantCount();
+      if (!mounted) return;
+      setState(() {
+        _actualParticipantCount = actualCount;
+        _isLoadingParticipantFloor = false;
+      });
+
+      final currentValue = _parseControllerInt(_currentMembersController, 1);
+      if (currentValue < actualCount) {
+        _currentMembersController.text = actualCount.toString();
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingParticipantFloor = false);
+    }
+  }
+
+  void _adjustCurrentMembers(int delta) {
+    final currentValue = _parseControllerInt(_currentMembersController, 1);
+    final maxMembers = _parseControllerInt(_maxMembersController, currentValue);
+    final nextValue = currentValue + delta;
+
+    if (delta < 0 && nextValue < _actualParticipantCount) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('현재 인원은 실제 참여자 수($_actualParticipantCount명)보다 작게 설정할 수 없어요.')),
+      );
+      return;
+    }
+
+    if (delta > 0 && nextValue > maxMembers) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('현재 인원은 최대 모집 인원을 초과할 수 없어요.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _currentMembersController.text = nextValue.toString();
+    });
   }
 
 
@@ -128,12 +203,20 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
       return;
     }
 
-    final minMembers = int.tryParse(_minMembersController.text.trim()) ?? 1;
+    final minMembers = _parseControllerInt(_minMembersController, 1);
     final maxMembers = int.tryParse(_maxMembersController.text.trim());
+    final currentMembers = _parseControllerInt(_currentMembersController, 1);
     final location = _locationController.text.trim();
     if (maxMembers == null || maxMembers < minMembers) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('모집 인원을 올바르게 입력해주세요.')),
+      );
+      return;
+    }
+
+    if (currentMembers < 1 || currentMembers > maxMembers) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('현재 모집 인원은 1명 이상, 최대 인원 이하여야 합니다.')),
       );
       return;
     }
@@ -148,6 +231,24 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
     final isEdit = widget.initialData != null;
     try {
       if (isEdit) {
+        final actualParticipants = await _fetchActualParticipantCount();
+        if (currentMembers < actualParticipants) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('현재 인원은 실제 참여자 수($actualParticipants명)보다 작게 저장할 수 없어요.')),
+          );
+          return;
+        }
+        if (maxMembers < actualParticipants) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('최대 인원은 실제 참여자 수($actualParticipants명)보다 작게 저장할 수 없어요.')),
+          );
+          return;
+        }
+      }
+
+      if (isEdit) {
         await Supabase.instance.client
             .from('gatherings')
             .update({
@@ -159,6 +260,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
               'gather_end': _selectedDateRange!.end.toIso8601String().split('T')[0],
               'min_members': minMembers,
               'max_members': maxMembers,
+              'current_members': currentMembers,
             })
             .eq('id', widget.initialData!['id']);
       } else {
@@ -173,7 +275,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
           'gather_end': _selectedDateRange!.end.toIso8601String().split('T')[0],
           'min_members': minMembers,
           'max_members': maxMembers,
-          'current_members': 1,
+          'current_members': currentMembers,
         });
       }
 
@@ -390,6 +492,61 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
                   Text('명', style: TextStyle(fontSize: 16, color: isDarkMode ? Colors.white70 : Colors.black87, fontWeight: FontWeight.bold)),
                 ],
               ),
+              if (widget.initialData != null) ...[
+                const SizedBox(height: 12),
+                Text('현재 모집 인원', style: labelStyle),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? const Color(0xFF2C2C2C) : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        onPressed: () => _adjustCurrentMembers(-1),
+                        style: IconButton.styleFrom(
+                          backgroundColor: isDarkMode ? Colors.white10 : Colors.white,
+                        ),
+                        icon: const Icon(Icons.remove),
+                      ),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            Text(
+                              '${_parseControllerInt(_currentMembersController, 1)}명',
+                              style: TextStyle(
+                                color: isDarkMode ? Colors.white : Colors.black,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _isLoadingParticipantFloor
+                                  ? '실제 참여자 수 확인 중...'
+                                  : '실제 참여자 최소 $_actualParticipantCount명',
+                              style: TextStyle(
+                                color: isDarkMode ? Colors.white54 : Colors.black54,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => _adjustCurrentMembers(1),
+                        style: IconButton.styleFrom(
+                          backgroundColor: const Color(0xFF00E676),
+                          foregroundColor: Colors.black,
+                        ),
+                        icon: const Icon(Icons.add),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
 
               // ==============================
@@ -452,8 +609,8 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: const Text(
-                    '모집글 등록하기',
+                  child: Text(
+                    widget.initialData != null ? '모집글 수정하기' : '모집글 등록하기',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                 ),

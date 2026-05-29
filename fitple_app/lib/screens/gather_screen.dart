@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'gather_edit_screen.dart';
 import 'chat_room_screen.dart';
+import 'user_profile_screen.dart';
+import 'group_chat_screen.dart';
+import 'review_list_screen.dart';
 
 class GatherScreen extends StatefulWidget {
   const GatherScreen({super.key});
@@ -169,7 +172,9 @@ class _GatherScreenState extends State<GatherScreen> {
       return matchCat && matchSearch;
     }).toList();
 
-    return Stack(
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
       children: [
         SingleChildScrollView(
               child: Padding(
@@ -356,9 +361,7 @@ class _GatherScreenState extends State<GatherScreen> {
                         ),
                       )
                     else
-                      ...filtered.map((g) => Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: RecruitmentCard(
+                      ...filtered.map((g) => RecruitmentCard(
                               isDarkMode: isDarkMode,
                               accentColor: _categoryColor(g['category'] ?? '기타'),
                               category: g['category'] ?? '기타',
@@ -392,8 +395,7 @@ class _GatherScreenState extends State<GatherScreen> {
                               onDelete: () => _deleteGathering(g['id']),
                               onToggleClosed: () =>
                                   _toggleClosed(g['id'], (g['is_closed'] ?? false) as bool),
-                            ),
-                          )),
+                            )),
                     const SizedBox(height: 100),
                   ],
                 ),
@@ -440,6 +442,7 @@ class _GatherScreenState extends State<GatherScreen> {
         ),
       ),
       ],
+      ),
     );
   }
 }
@@ -534,465 +537,477 @@ class _RecruitmentCardState extends State<RecruitmentCard>
     });
   }
 
+  IconData _categoryIcon(String category) {
+    switch (category) {
+      case '축구':
+        return Icons.sports_soccer;
+      case '족구':
+      case '배구':
+        return Icons.sports_volleyball;
+      case '배드민턴':
+        return Icons.sports_tennis;
+      case '헬스':
+        return Icons.fitness_center;
+      case '러닝':
+        return Icons.directions_run;
+      default:
+        return Icons.sports;
+    }
+  }
+
+  Future<void> _openReviewList() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReviewListScreen(
+          gatheringId: widget.gatheringId,
+          gatheringTitle: widget.gatheringTitle,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final cardColor = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
+    final bgColor = widget.isDarkMode ? const Color(0xFF1E1E1E) : Colors.white;
     final textColor = widget.isDarkMode ? Colors.white : Colors.black;
     final subTextColor = widget.isDarkMode ? Colors.white54 : Colors.black54;
+    final dividerColor = widget.isDarkMode ? Colors.white12 : Colors.black12;
+    final thumbBgColor = widget.isClosed
+        ? (widget.isDarkMode ? Colors.grey[800]! : Colors.grey[200]!)
+        : (widget.isDarkMode
+            ? widget.accentColor.withValues(alpha: 0.25)
+            : widget.accentColor.withValues(alpha: 0.12));
     final isAuthor =
         Supabase.instance.client.auth.currentUser?.id == widget.authorId;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          if (!widget.isDarkMode)
-            BoxShadow(
-                color: Colors.grey.withValues(alpha: 0.2),
-                blurRadius: 10,
-                offset: const Offset(0, 4)),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          decoration: BoxDecoration(
-            border: Border(
-                left: BorderSide(
-                    color: widget.isClosed
-                        ? Colors.grey
-                        : widget.accentColor,
-                    width: 6)),
-          ),
-          padding: const EdgeInsets.only(top: 18, left: 20, right: 20, bottom: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. 카테고리 + 마감 배지 + 시간 + 더보기
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: (widget.isClosed ? Colors.grey : widget.accentColor)
-                          .withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                          color: (widget.isClosed ? Colors.grey : widget.accentColor)
-                              .withValues(alpha: 0.3)),
-                    ),
-                    child: Text(widget.category,
-                        style: TextStyle(
-                            color: widget.isClosed ? Colors.grey : widget.accentColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold)),
-                  ),
-                  if (widget.isClosed) ...[
-                    const SizedBox(width: 8),
+    return Column(
+      children: [
+        // ── Tappable summary row ──────────────────────────────────────────
+        GestureDetector(
+          onTap: _toggleExpand,
+          child: Container(
+            color: bgColor,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left thumbnail 80×80
+                Stack(
+                  children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      width: 80,
+                      height: 80,
                       decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.withValues(alpha: 0.35)),
+                        color: thumbBgColor,
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Text('마감',
-                          style: TextStyle(
-                              color: Colors.red,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold)),
+                      child: Icon(
+                        _categoryIcon(widget.category),
+                        color: widget.isClosed
+                            ? Colors.grey
+                            : widget.accentColor,
+                        size: 36,
+                      ),
                     ),
-                  ],
-                  const SizedBox(width: 8),
-                  Text(widget.timeAgo,
-                      style: TextStyle(color: subTextColor, fontSize: 12)),
-                  const Spacer(),
-                  if (isAuthor)
-                    PopupMenuButton<String>(
-                      icon: Icon(Icons.more_vert, color: subTextColor, size: 18),
-                      color: widget.isDarkMode
-                          ? const Color(0xFF2C2C2C)
-                          : Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12)),
-                      onSelected: (value) {
-                        if (value == 'edit') widget.onEdit?.call();
-                        if (value == 'delete') widget.onDelete?.call();
-                      },
-                      itemBuilder: (ctx) => [
-                        PopupMenuItem(
-                          value: 'edit',
-                          child: Row(children: [
-                            Icon(Icons.edit_outlined,
-                                size: 18,
-                                color: widget.isDarkMode
-                                    ? Colors.white70
-                                    : Colors.black87),
-                            const SizedBox(width: 8),
-                            const Text('수정'),
-                          ]),
-                        ),
-                        PopupMenuItem(
-                          value: 'delete',
-                          child: Row(children: [
-                            const Icon(Icons.delete_outline,
-                                size: 18, color: Colors.red),
-                            const SizedBox(width: 8),
-                            const Text('삭제',
-                                style: TextStyle(color: Colors.red)),
-                          ]),
-                        ),
-                      ],
-                    ),
-                ],
-              ),
-              const SizedBox(height: 14),
-
-              // 2. 제목
-              Text(widget.title,
-                  style: TextStyle(
-                      color: widget.isClosed ? subTextColor : textColor,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 14),
-
-              // 3. 유저 정보 + 위치
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: widget.isDarkMode
-                        ? const Color(0xFF2C2C2C)
-                        : Colors.grey[300],
-                    child: Icon(Icons.person, color: subTextColor, size: 20), //나중에 사용자 프로필 사진으로 바꿔야함
-                  ),
-                  const SizedBox(width: 10),
-                  Column( //닉네임, 온도
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [//닉네임
-                      Text(widget.userName,
-                          style: TextStyle(
-                              color: textColor,
+                    if (widget.isClosed)
+                      Positioned.fill(
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.45),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Text(
+                            '마감',
+                            style: TextStyle(
+                              color: Colors.white,
                               fontSize: 13,
-                              fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Row( //온도
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 12),
+
+                // Right info column
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title row + popup menu
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          const Icon(Icons.thermostat,
-                              color: Color(0xFF00E676), size: 12),
-                          Text(widget.userScore,
-                              style: const TextStyle(
-                                  color: Color(0xFF00E676), fontSize: 11)),
-                          const SizedBox(width: 6),
-                          Text(widget.userBadge,
-                              style: const TextStyle(
-                                  color: Colors.orangeAccent, fontSize: 11)),
+                          Expanded(
+                            child: Text(
+                              widget.title,
+                              style: TextStyle(
+                                color: widget.isClosed
+                                    ? subTextColor
+                                    : textColor,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isAuthor)
+                            SizedBox(
+                              width: 28,
+                              height: 28,
+                              child: PopupMenuButton<String>(
+                                padding: EdgeInsets.zero,
+                                icon: Icon(Icons.more_vert,
+                                    color: subTextColor, size: 16),
+                                color: widget.isDarkMode
+                                    ? const Color(0xFF2C2C2C)
+                                    : Colors.white,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius:
+                                        BorderRadius.circular(12)),
+                                onSelected: (value) {
+                                  if (value == 'edit') {
+                                    widget.onEdit?.call();
+                                  }
+                                  if (value == 'delete') {
+                                    widget.onDelete?.call();
+                                  }
+                                },
+                                itemBuilder: (ctx) => [
+                                  PopupMenuItem(
+                                    value: 'edit',
+                                    child: Row(children: [
+                                      Icon(Icons.edit_outlined,
+                                          size: 18,
+                                          color: widget.isDarkMode
+                                              ? Colors.white70
+                                              : Colors.black87),
+                                      const SizedBox(width: 8),
+                                      const Text('수정'),
+                                    ]),
+                                  ),
+                                  PopupMenuItem(
+                                    value: 'delete',
+                                    child: Row(children: [
+                                      const Icon(
+                                          Icons.delete_outline,
+                                          size: 18,
+                                          color: Colors.red),
+                                      const SizedBox(width: 8),
+                                      const Text('삭제',
+                                          style: TextStyle(
+                                              color: Colors.red)),
+                                    ]),
+                                  ),
+                                ],
+                              ),
+                            ),
                         ],
+                      ),
+                      const SizedBox(height: 5),
+
+                      // Category · location · timeAgo
+                      Row(
+                        children: [
+                          Text(
+                            widget.category,
+                            style: TextStyle(
+                                color: subTextColor, fontSize: 12),
+                          ),
+                          Text(' · ',
+                              style: TextStyle(
+                                  color: subTextColor, fontSize: 12)),
+                          Icon(Icons.location_on_outlined,
+                              color: subTextColor, size: 12),
+                          const SizedBox(width: 2),
+                          Flexible(
+                            child: Text(
+                              widget.extraInfoText,
+                              style: TextStyle(
+                                  color: subTextColor, fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(' · ',
+                              style: TextStyle(
+                                  color: subTextColor, fontSize: 12)),
+                          Text(
+                            widget.timeAgo,
+                            style: TextStyle(
+                                color: subTextColor, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+
+                      // Member count + progress bar
+                      Row(
+                        children: [
+                          Icon(Icons.people_outline,
+                              color: subTextColor, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${widget.currentMembers}/${widget.maxMembers}명',
+                            style: TextStyle(
+                              color: widget.isClosed
+                                  ? subTextColor
+                                  : widget.accentColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: LinearProgressIndicator(
+                                value: widget.maxMembers > 0
+                                    ? (widget.currentMembers /
+                                            widget.maxMembers)
+                                        .clamp(0.0, 1.0)
+                                    : 0,
+                                backgroundColor: widget.isDarkMode
+                                    ? Colors.white12
+                                    : Colors.grey[200],
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(
+                                  widget.isClosed
+                                      ? Colors.grey
+                                      : widget.accentColor,
+                                ),
+                                minHeight: 4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 7),
+
+                      // Author row
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserProfileScreen(
+                              userId: widget.authorId,
+                              nickname: widget.userName,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 10,
+                              backgroundColor: widget.isDarkMode
+                                  ? const Color(0xFF2C2C2C)
+                                  : Colors.grey[300],
+                              child: Icon(Icons.person,
+                                  color: subTextColor, size: 13),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              widget.userName,
+                              style: TextStyle(
+                                  color: subTextColor, fontSize: 12),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
-                  const Spacer(), //공백
-                  Flexible(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: ElevatedButton.icon(
-                            onPressed: () {},
-                            icon: Icon(Icons.location_on_outlined, color: subTextColor, size: 14),
-                            label: Text(
-                              widget.extraInfoText,
-                              style: TextStyle(color: subTextColor, fontSize: 12),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: cardColor,
-                              elevation: 0,
-                              shadowColor: Colors.transparent,
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                              alignment: Alignment.centerRight,
-                            ).copyWith(
-                              overlayColor: WidgetStateProperty.all(Colors.transparent),
-                              surfaceTintColor: WidgetStateProperty.all(Colors.transparent),
-                            ),
+                ),
+
+                // Expand arrow
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, left: 4),
+                  child: Icon(
+                    _isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: subTextColor,
+                    size: 18,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+
+        // ── Expandable detail section ─────────────────────────────────────
+        SizeTransition(
+          sizeFactor: _animation,
+          axisAlignment: -1.0,
+          child: Container(
+            color: bgColor,
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Divider(height: 1, color: dividerColor),
+                const SizedBox(height: 12),
+
+                // 모집 날짜
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today_outlined,
+                        color: subTextColor, size: 16),
+                    const SizedBox(width: 8),
+                    Text('모집 기간: ',
+                        style: TextStyle(
+                            color: subTextColor,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold)),
+                    Expanded(
+                      child: Text(widget.gatherDate,
+                          style:
+                              TextStyle(color: textColor, fontSize: 13)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // 본문
+                Text(widget.description,
+                    style: TextStyle(
+                        color: textColor, fontSize: 14, height: 1.5)),
+                const SizedBox(height: 14),
+
+                // 채팅하기 (비작성자) or 마감하기/재모집 (작성자)
+                if (isAuthor)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: widget.onToggleClosed,
+                        icon: Icon(
+                          widget.isClosed
+                              ? Icons.refresh_rounded
+                              : Icons.block_rounded,
+                          size: 18,
+                          color: widget.isClosed
+                              ? const Color(0xFF00E676)
+                              : Colors.red,
+                        ),
+                        label: Text(
+                          widget.isClosed ? '재모집하기' : '모집 마감하기',
+                          style: TextStyle(
+                            color: widget.isClosed
+                                ? const Color(0xFF00E676)
+                                : Colors.red,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-
-              // 4. 멤버 진행바
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: widget.maxMembers > 0
-                            ? (widget.currentMembers / widget.maxMembers)
-                                .clamp(0.0, 1.0)
-                            : 0,
-                        backgroundColor: widget.isDarkMode
-                            ? Colors.white12
-                            : Colors.grey[200],
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                            widget.isClosed ? Colors.grey : widget.accentColor),
-                        minHeight: 6,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    '${widget.currentMembers}/${widget.maxMembers}명',
-                    style: TextStyle(
-                        color: widget.isClosed ? subTextColor : widget.accentColor,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold),
-                  ),
-                ],
-              ),
-
-              // 5. 상세정보 (애니메이션 펼치기)
-              SizeTransition(
-                sizeFactor: _animation,
-                axisAlignment: -1.0,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 16),
-                    Divider(
-                        color: widget.isDarkMode
-                            ? Colors.white12
-                            : Colors.black12),
-                    const SizedBox(height: 12),
-
-                    // 모집 날짜
-                    Row(
-                      children: [
-                        Icon(Icons.calendar_today_outlined,
-                            color: subTextColor, size: 16),
-                        const SizedBox(width: 8),
-                        Text('모집 기간: ',
-                            style: TextStyle(
-                                color: subTextColor,
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold)),
-                        Expanded(
-                          child: Text(widget.gatherDate,
-                              style: TextStyle(color: textColor, fontSize: 13)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // 본문
-                    Text(widget.description,
-                        style: TextStyle(
-                            color: textColor, fontSize: 14, height: 1.5)),
-                    const SizedBox(height: 14),
-
-                    // 채팅하기 (비작성자) or 마감하기/재모집 (작성자)
-                    if (isAuthor)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: widget.onToggleClosed,
-                            icon: Icon(
-                              widget.isClosed
-                                  ? Icons.refresh_rounded
-                                  : Icons.block_rounded,
-                              size: 18,
+                        style: OutlinedButton.styleFrom(
+                          side: BorderSide(
                               color: widget.isClosed
                                   ? const Color(0xFF00E676)
-                                  : Colors.red,
-                            ),
-                            label: Text(
-                              widget.isClosed ? '재모집하기' : '모집 마감하기',
-                              style: TextStyle(
-                                color: widget.isClosed
-                                    ? const Color(0xFF00E676)
-                                    : Colors.red,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(
-                                  color: widget.isClosed
-                                      ? const Color(0xFF00E676)
-                                      : Colors.red),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
+                                  : Colors.red),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 12),
                         ),
-                      )
-                    else
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: widget.isClosed
-                              ? Container(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 14),
-                                  decoration: BoxDecoration(
-                                    color: widget.isDarkMode
-                                        ? Colors.white12
-                                        : Colors.grey[200],
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Center(
-                                    child: Text('모집이 마감되었어요',
-                                        style: TextStyle(
-                                            color: subTextColor,
-                                            fontWeight: FontWeight.bold)),
-                                  ),
-                                )
-                              : Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                mainAxisSize: MainAxisSize.max,
-                                children: [
-                                  Expanded(
-                                    child: ElevatedButton.icon(
-                                        onPressed: () async {
-                                          final currentUser = Supabase
-                                              .instance.client.auth.currentUser;
-                                          if (currentUser == null) return;
-                                          try {
-                                            final existing =
-                                                await Supabase.instance.client
-                                                    .from('chat_rooms')
-                                                    .select()
-                                                    .eq('gathering_id',
-                                                        widget.gatheringId)
-                                                    .eq('guest_id', currentUser.id)
-                                                    .maybeSingle();
-                                    
-                                            String roomId;
-                                            if (existing != null) {
-                                              roomId = existing['id'];
-                                            } else {
-                                              final created = await Supabase
-                                                  .instance.client
-                                                  .from('chat_rooms')
-                                                  .insert({
-                                                    'gathering_id':
-                                                        widget.gatheringId,
-                                                    'gathering_title':
-                                                        widget.gatheringTitle,
-                                                    'host_id': widget.authorId,
-                                                    'host_nickname':
-                                                        widget.hostNickname,
-                                                    'guest_id': currentUser.id,
-                                                    'guest_nickname': currentUser
-                                                            .userMetadata?[
-                                                                'display_name'] ??
-                                                        currentUser.email ??
-                                                        '익명',
-                                                  })
-                                                  .select()
-                                                  .single();
-                                              roomId = created['id'];
-                                            }
-                                            if (!context.mounted) return;
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) => ChatRoomScreen(
-                                                  roomId: roomId,
-                                                  otherUserNickname:
-                                                      widget.hostNickname,
-                                                  gatheringTitle:
-                                                      widget.gatheringTitle,
-                                                ),
-                                              ),
-                                            );
-                                          } catch (e) {
-                                            if (context.mounted) {
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(SnackBar(
-                                                      content: Text(
-                                                          '채팅 시작 실패: $e')));
-                                            }
-                                          }
-                                        },
-                                        icon: const Icon(
-                                            Icons.chat_bubble_outline,
-                                            size: 18,
-                                            color: Colors.black),
-                                        label: const Text('팀장과 채팅하기',
-                                            style: TextStyle(
-                                                color: Colors.black,
-                                                fontWeight: FontWeight.bold)),
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFF00E676),
-                                          elevation: 0,
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(12)),
-                                          padding: const EdgeInsets.symmetric(
-                                              vertical: 12),
-                                        ),
-                                      ),
-                                  ),
-                                  const SizedBox(width: 12,),
-                                  //1:1채팅, 단체채팅 나누기
-                                    Expanded(
-                                      child: ElevatedButton.icon(
-                                      onPressed: () async {
+                      ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: widget.isClosed
+                          ? Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 14),
+                              decoration: BoxDecoration(
+                                color: widget.isDarkMode
+                                    ? Colors.white12
+                                    : Colors.grey[200],
+                                borderRadius:
+                                    BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: Text('모집이 마감되었어요',
+                                    style: TextStyle(
+                                        color: subTextColor,
+                                        fontWeight:
+                                            FontWeight.bold)),
+                              ),
+                            )
+                          : Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.center,
+                              mainAxisSize: MainAxisSize.max,
+                              children: [
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: () async {
                                       final currentUser = Supabase
-                                          .instance.client.auth.currentUser;
-                                      if (currentUser == null) return;
+                                          .instance
+                                          .client
+                                          .auth
+                                          .currentUser;
+                                      if (currentUser == null) {
+                                        return;
+                                      }
                                       try {
                                         final existing =
-                                            await Supabase.instance.client
+                                            await Supabase
+                                                .instance.client
                                                 .from('chat_rooms')
                                                 .select()
                                                 .eq('gathering_id',
                                                     widget.gatheringId)
-                                                .eq('guest_id', currentUser.id)
+                                                .eq('guest_id',
+                                                    currentUser.id)
                                                 .maybeSingle();
-                                      
+
                                         String roomId;
                                         if (existing != null) {
                                           roomId = existing['id'];
                                         } else {
-                                          final created = await Supabase
-                                              .instance.client
-                                              .from('chat_rooms')
-                                              .insert({
-                                                'gathering_id':
-                                                    widget.gatheringId,
-                                                'gathering_title':
-                                                    widget.gatheringTitle,
-                                                'host_id': widget.authorId,
-                                                'host_nickname':
-                                                    widget.hostNickname,
-                                                'guest_id': currentUser.id,
-                                                'guest_nickname': currentUser
-                                                        .userMetadata?[
-                                                            'display_name'] ??
-                                                    currentUser.email ??
-                                                    '익명',
-                                              })
-                                              .select()
-                                              .single();
+                                          final created =
+                                              await Supabase
+                                                  .instance.client
+                                                  .from('chat_rooms')
+                                                  .insert({
+                                                    'gathering_id':
+                                                        widget
+                                                            .gatheringId,
+                                                    'gathering_title':
+                                                        widget
+                                                            .gatheringTitle,
+                                                    'host_id':
+                                                        widget.authorId,
+                                                    'host_nickname':
+                                                        widget
+                                                            .hostNickname,
+                                                    'guest_id':
+                                                        currentUser.id,
+                                                    'guest_nickname':
+                                                        currentUser
+                                                                .userMetadata?[
+                                                                    'display_name'] ??
+                                                            currentUser
+                                                                .email ??
+                                                            '익명',
+                                                  })
+                                                  .select()
+                                                  .single();
                                           roomId = created['id'];
                                         }
                                         if (!context.mounted) return;
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (context) => ChatRoomScreen(
+                                            builder: (context) =>
+                                                ChatRoomScreen(
                                               roomId: roomId,
                                               otherUserNickname:
                                                   widget.hostNickname,
@@ -1010,51 +1025,98 @@ class _RecruitmentCardState extends State<RecruitmentCard>
                                         }
                                       }
                                     },
-                                      icon: const Icon(
-                                      Icons.forum_outlined,
-                                      size: 18,
-                                      color: Colors.black),
-                                      label: const Text('팀 채팅하기',
-                                      style: TextStyle(
-                                      color: Colors.black,
-                                        fontWeight: FontWeight.bold)),
-                                        style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF00E676),
+                                    icon: const Icon(
+                                        Icons.chat_bubble_outline,
+                                        size: 18,
+                                        color: Colors.black),
+                                    label: const Text('팀장과 채팅하기',
+                                        style: TextStyle(
+                                            color: Colors.black,
+                                            fontWeight:
+                                                FontWeight.bold)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor:
+                                          const Color(0xFF00E676),
                                       elevation: 0,
                                       shape: RoundedRectangleBorder(
                                           borderRadius:
-                                              BorderRadius.circular(12)),
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 12),
-                                                                        ),
-                                                                      ),
+                                              BorderRadius.circular(
+                                                  12)),
+                                      padding:
+                                          const EdgeInsets.symmetric(
+                                              vertical: 12),
                                     ),
-                                ],
-                              ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                // 단체채팅
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => GroupChatScreen(
+                                          gatheringId: widget.gatheringId,
+                                          gatheringTitle: widget.gatheringTitle,
+                                          hostId: widget.authorId,
+                                          hostNickname: widget.hostNickname,
+                                        ),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.forum_outlined,
+                                        size: 18, color: Colors.black),
+                                    label: const Text('팀 채팅하기',
+                                        style: TextStyle(
+                                            color: Colors.black,
+                                            fontWeight: FontWeight.bold)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF00E676),
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12)),
+                                      padding: const EdgeInsets.symmetric(vertical: 12),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _openReviewList,
+                      icon: const Icon(
+                        Icons.reviews_outlined,
+                        size: 18,
+                        color: Color(0xFF00E676),
+                      ),
+                      label: const Text(
+                        '참여자 평가하기',
+                        style: TextStyle(
+                          color: Color(0xFF00E676),
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                  ],
-                ),
-              ),
-
-              // 6. 펼치기/접기 버튼
-              Center(
-                child: IconButton(
-                  onPressed: _toggleExpand,
-                  icon: Icon(
-                    _isExpanded
-                        ? Icons.keyboard_arrow_up
-                        : Icons.keyboard_arrow_down,
-                    color: subTextColor,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFF00E676)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
                   ),
-                  splashColor: Colors.transparent,
-                  highlightColor: Colors.transparent,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-      ),
+
+        Divider(height: 1, color: dividerColor),
+      ],
     );
   }
 }

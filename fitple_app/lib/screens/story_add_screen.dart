@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -224,13 +223,13 @@ class _StorySelectionScreenState extends State<StorySelectionScreen> {
                                       return GestureDetector(
                                         onTap: () async {
                                           // 갤러리 사진을 눌렀을 때
+                                          final nav = Navigator.of(context);
                                           final file = await asset.file;
                                           if (file != null) {
                                             final bytes = await file.readAsBytes();
-                                            if (mounted) {
-                                              Navigator.pop(context); // 창 닫고
-                                              widget.onImageSelected(bytes); // 업로드 실행
-                                            }
+                                            if (!mounted) return;
+                                            nav.pop(); // 창 닫고
+                                            widget.onImageSelected(bytes); // 업로드 실행
                                           }
                                         },
                                         child: ClipRRect(

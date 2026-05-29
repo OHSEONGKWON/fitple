@@ -4,6 +4,7 @@ import 'home_screen.dart';
 import 'gather_screen.dart';
 import 'calendar_screen.dart';
 import 'chat_list_screen.dart';
+import 'feed_screen.dart';
 
 class MainHomeScreen extends StatefulWidget {
   const MainHomeScreen({super.key});
@@ -27,10 +28,11 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
 
     final List<Widget> pages = [
       HomeScreen(
-        onNavigateToGather: () => changeTab(2),
-        onNavigateToCalendar: () => changeTab(1),
-        onNavigateToProfile: () => changeTab(3),
+        onNavigateToGather: () => changeTab(3),
+        onNavigateToCalendar: () => changeTab(2),
+        onNavigateToProfile: () => changeTab(4),
       ),
+      const FeedScreen(),
       const CalendarScreen(),
       const GatherScreen(),
       const ProfileScreen(),
@@ -138,6 +140,10 @@ class _MainHomeScreenState extends State<MainHomeScreen> {
                 BottomNavigationBarItem(
                   icon: Icon(Icons.home_filled),
                   label: '홈',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.favorite_border),
+                  label: '피드',
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.calendar_month_outlined),

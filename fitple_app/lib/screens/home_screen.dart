@@ -54,6 +54,15 @@ class _HomeScreenState extends State<HomeScreen> {
         '회원';
 
     try {
+      // 팔로잉 유저 ID 목록
+      final followingRaw = await Supabase.instance.client
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', user.id);
+      final followingIds = (followingRaw as List)
+          .map((f) => f['following_id'] as String)
+          .toList();
+
       final results = await Future.wait([
         Supabase.instance.client
             .from('gatherings')
@@ -68,7 +77,13 @@ class _HomeScreenState extends State<HomeScreen> {
       ]);
 
       final gatheringsData = results[0] as List;
-      final storiesData = results[1] as List;
+      final allStoriesData = results[1] as List;
+
+      // 내 스토리 + 팔로잉 유저 스토리만 표시
+      final storiesData = allStoriesData.where((s) {
+        final uid = s['user_id'] as String;
+        return uid == user.id || followingIds.contains(uid);
+      }).toList();
 
       // 유저별 최신 스토리 1개씩만 추출
       final Map<String, Map<String, dynamic>> latestPerUser = {};
@@ -140,6 +155,18 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
+  IconData _categoryIconData(String category) {
+    switch (category) {
+      case '축구': return Icons.sports_soccer;
+      case '족구': return Icons.sports_volleyball;
+      case '배구': return Icons.sports_volleyball;
+      case '배드민턴': return Icons.sports_tennis;
+      case '헬스': return Icons.fitness_center;
+      case '러닝': return Icons.directions_run;
+      default: return Icons.sports;
+    }
+  }
+
   Color _categoryColor(String category) {
     switch (category) {
       case '러닝':
@@ -192,14 +219,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (mounted) {
         await _loadData(); // 스토리 목록 새로고침
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('스토리가 업로드되었습니다! 🎉'),
-            duration: Duration(seconds: 2),
-            backgroundColor: Color(0xFF00E676),
-          ),
-        );
       }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('스토리가 업로드되었습니다! 🎉'),
+          duration: Duration(seconds: 2),
+          backgroundColor: Color(0xFF00E676),
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -285,7 +313,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: ClipOval(
                                   child: _myStoryUrl != null
                                       ? Image.network(_myStoryUrl!, fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) =>
+                                          errorBuilder: (context, error, _) =>
                                               const Center(child: Text('👤', style: TextStyle(fontSize: 34))))
                                       : const Center(child: Text('👤', style: TextStyle(fontSize: 34))),
                                 ),
@@ -334,7 +362,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   // 2. 다른 유저 스토리
                   ..._storyItems
                       .where((s) => s['isOwn'] != true)
-                      .map((story) => GestureDetector(
+                      .map<Widget>((story) => GestureDetector(
                             onTap: () {
                               final userStories = _storyItems
                                   .where((s) => s['userId'] == story['userId'])
@@ -366,7 +394,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                       child: Image.network(
                                         story['imageUrl'] as String,
                                         fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) =>
+                                        errorBuilder: (context, error, _) =>
                                             const Center(child: Text('👤', style: TextStyle(fontSize: 34))),
                                       ),
                                     ),
@@ -388,8 +416,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ],
                               ),
                             ),
-                          ))
-                      .toList(),
+                          )),
                 ],
               ),
             ),
@@ -501,94 +528,113 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               )
             else
-              SizedBox(
-                height: 164,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  itemCount: _recentGatherings.length,
-                  itemBuilder: (context, index) {
-                    final g = _recentGatherings[index];
-                    final accent = _categoryColor(g['category'] ?? '기타');
-                    final current = (g['current_members'] ?? 0) as int;
-                    final max = (g['max_members'] ?? 1) as int;
-                    return Container(
-                      width: 162,
-                      margin: const EdgeInsets.only(right: 12),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: cardColor,
-                        borderRadius: BorderRadius.circular(16),
-                        border:
-                            Border(left: BorderSide(color: accent, width: 5)),
-                        boxShadow: [
-                          if (!isDarkMode)
-                            BoxShadow(
-                                color: Colors.grey.withValues(alpha: 0.12),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2)),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              Container(
+                color: cardColor,
+                child: Column(
+                  children: [
+                    Divider(height: 1, color: isDarkMode ? Colors.white12 : Colors.grey.shade200),
+                    ..._recentGatherings.take(4).map((g) {
+                      final accent = _categoryColor(g['category'] ?? '기타');
+                      final current = (g['current_members'] ?? 0) as int;
+                      final max = (g['max_members'] ?? 1) as int;
+                      final isClosed = (g['is_closed'] ?? false) as bool;
+                      final categoryIcon = _categoryIconData(g['category'] ?? '');
+                      return Column(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: accent.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(6),
+                          InkWell(
+                            onTap: () => Navigator.push(context,
+                                MaterialPageRoute(builder: (_) => const GatherScreen())),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  // 썸네일
+                                  Container(
+                                    width: 60,
+                                    height: 60,
+                                    decoration: BoxDecoration(
+                                      color: isClosed
+                                          ? (isDarkMode ? Colors.white12 : Colors.grey.shade200)
+                                          : accent.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(categoryIcon, size: 28,
+                                        color: isClosed ? Colors.grey : accent),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  // 정보
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(g['title'] ?? '',
+                                            style: TextStyle(
+                                                color: isClosed ? Colors.grey : textColor,
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            Text(g['category'] ?? '',
+                                                style: TextStyle(
+                                                    color: isClosed ? Colors.grey : accent,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600)),
+                                            Text(' · ', style: TextStyle(color: subTextColor, fontSize: 12)),
+                                            Text(_formatTimeAgo(g['created_at'] ?? DateTime.now().toIso8601String()),
+                                                style: TextStyle(color: subTextColor, fontSize: 12)),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 5),
+                                        Row(
+                                          children: [
+                                            Icon(Icons.people_outline, size: 12, color: subTextColor),
+                                            const SizedBox(width: 3),
+                                            Text('$current/$max명',
+                                                style: TextStyle(
+                                                    color: isClosed ? Colors.grey : accent,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.bold)),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(4),
+                                                child: LinearProgressIndicator(
+                                                  value: max > 0 ? (current / max).clamp(0.0, 1.0) : 0,
+                                                  backgroundColor: isDarkMode ? Colors.white12 : Colors.grey.shade200,
+                                                  valueColor: AlwaysStoppedAnimation<Color>(isClosed ? Colors.grey : accent),
+                                                  minHeight: 4,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (isClosed)
+                                    Container(
+                                      margin: const EdgeInsets.only(left: 8),
+                                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey.shade200,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: const Text('마감',
+                                          style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold)),
+                                    ),
+                                ],
+                              ),
                             ),
-                            child: Text(g['category'] ?? '기타',
-                                style: TextStyle(
-                                    color: accent,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold)),
                           ),
-                          const SizedBox(height: 8),
-                          Expanded(
-                            child: Text(
-                              g['title'] ?? '',
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                  color: textColor,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  height: 1.35),
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: max > 0 ? current / max : 0,
-                              backgroundColor: isDarkMode
-                                  ? Colors.white12
-                                  : Colors.grey[200],
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(accent),
-                              minHeight: 5,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('👥 $current/$max',
-                                  style: TextStyle(
-                                      color: subTextColor, fontSize: 11)),
-                              Text(
-                                  _formatTimeAgo(g['created_at'] ??
-                                      DateTime.now().toIso8601String()),
-                                  style: TextStyle(
-                                      color: subTextColor, fontSize: 10)),
-                            ],
-                          ),
+                          Divider(height: 1, color: isDarkMode ? Colors.white12 : Colors.grey.shade200),
                         ],
-                      ),
-                    );
-                  },
+                      );
+                    }),
+                  ],
                 ),
               ),
 

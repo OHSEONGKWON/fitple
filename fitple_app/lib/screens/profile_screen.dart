@@ -3,6 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'profile_edit_screen.dart';
 import 'login_screen.dart';
 import 'workout_cert_screen.dart';
+import 'follow_list_screen.dart';
+import 'follow_requests_screen.dart';
+import 'account_settings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -15,16 +18,65 @@ class _ProfileScreenState extends State<ProfileScreen> {
   int _totalPoints = 0;
   int _streakCount = 0;
   int _totalCertifications = 0;
+  int _followerCount = 0;
+  int _followingCount = 0;
+  bool _isPrivate = false;
+  int _pendingRequestCount = 0;
 
   @override
   void initState() {
     super.initState();
     _loadPoints();
+    _loadFollowCounts();
+    _loadPrivacySetting();
   }
 
   void _refreshProfile() {
     setState(() {});
     _loadPoints();
+    _loadFollowCounts();
+    _loadPrivacySetting();
+  }
+
+  Future<void> _loadPrivacySetting() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    try {
+      final data = await Supabase.instance.client
+          .from('user_settings')
+          .select('is_private')
+          .eq('user_id', user.id)
+          .maybeSingle();
+      if (mounted) {
+        setState(() => _isPrivate = data?['is_private'] as bool? ?? false);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadFollowCounts() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    try {
+      final followerList = await Supabase.instance.client
+          .from('follows')
+          .select('id')
+          .eq('following_id', user.id);
+      final followingList = await Supabase.instance.client
+          .from('follows')
+          .select('id')
+          .eq('follower_id', user.id);
+      final requestList = await Supabase.instance.client
+          .from('follow_requests')
+          .select('id')
+          .eq('target_id', user.id);
+      if (mounted) {
+        setState(() {
+          _followerCount = (followerList as List).length;
+          _followingCount = (followingList as List).length;
+          _pendingRequestCount = (requestList as List).length;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadPoints() async {
@@ -159,6 +211,87 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 4),
                 Text(email,
                     style: TextStyle(color: subTextColor, fontSize: 13)),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => FollowListScreen(
+                            userId: user!.id,
+                            isFollowers: true,
+                          ),
+                        ),
+                      ).then((_) => _loadFollowCounts()),
+                      child: _FollowCountItem(
+                          label: '팔로워',
+                          count: _followerCount,
+                          textColor: textColor,
+                          subTextColor: subTextColor),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 28,
+                      color: isDarkMode ? Colors.white12 : Colors.black12,
+                      margin: const EdgeInsets.symmetric(horizontal: 24),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => FollowListScreen(
+                            userId: user!.id,
+                            isFollowers: false,
+                          ),
+                        ),
+                      ).then((_) => _loadFollowCounts()),
+                      child: _FollowCountItem(
+                          label: '팔로잉',
+                          count: _followingCount,
+                          textColor: textColor,
+                          subTextColor: subTextColor),
+                    ),
+                  ],
+                ),
+                // 팔로우 요청 배지 (비공개 계정일 때)
+                if (_isPrivate && _pendingRequestCount > 0) ...[
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const FollowRequestsScreen()),
+                    ).then((_) => _loadFollowCounts()),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00E676).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: const Color(0xFF00E676)
+                                .withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.person_add_outlined,
+                              color: Color(0xFF00E676), size: 16),
+                          const SizedBox(width: 6),
+                          Text(
+                            '팔로우 요청 $_pendingRequestCount건',
+                            style: const TextStyle(
+                                color: Color(0xFF00E676),
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -391,6 +524,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   width: double.infinity,
                   height: 52,
                   child: OutlinedButton.icon(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const AccountSettingsScreen()),
+                    ).then((_) => _loadPrivacySetting()),
+                    icon: Icon(Icons.settings_outlined,
+                        size: 18,
+                        color: isDarkMode ? Colors.white60 : Colors.black54),
+                    label: Text('계정 설정',
+                        style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: isDarkMode ? Colors.white60 : Colors.black54)),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(
+                          color: isDarkMode ? Colors.white24 : Colors.black12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: OutlinedButton.icon(
                     onPressed: () => _signOut(context),
                     icon: Icon(Icons.logout_rounded,
                         size: 18,
@@ -451,6 +610,33 @@ class _StatItem extends StatelessWidget {
               style: TextStyle(fontSize: 11, color: subColor)),
         ],
       ),
+    );
+  }
+}
+
+class _FollowCountItem extends StatelessWidget {
+  final String label;
+  final int count;
+  final Color textColor;
+  final Color subTextColor;
+
+  const _FollowCountItem({
+    required this.label,
+    required this.count,
+    required this.textColor,
+    required this.subTextColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text('$count',
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(fontSize: 12, color: subTextColor)),
+      ],
     );
   }
 }
