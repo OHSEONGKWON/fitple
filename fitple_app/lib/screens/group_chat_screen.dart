@@ -23,7 +23,9 @@ class GroupChatScreen extends StatefulWidget {
 class _GroupChatScreenState extends State<GroupChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  late final Stream<List<Map<String, dynamic>>> _messagesStream;
+  List<Map<String, dynamic>> _messages = [];
+  StreamSubscription<List<Map<String, dynamic>>>? _messagesSubscription;
+  Timer? _messagesPollingTimer;
   String? _roomId;
   bool _isJoining = true;
 
@@ -43,9 +45,68 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
   @override
   void dispose() {
+    _messagesSubscription?.cancel();
+    _messagesPollingTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _startMessagesPollingFallback() {
+    _messagesPollingTimer?.cancel();
+    _messagesPollingTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _fetchMessagesOnce(),
+    );
+  }
+
+  Future<void> _fetchMessagesOnce() async {
+    if (_roomId == null) return;
+    try {
+      final rows = await Supabase.instance.client
+          .from('group_messages')
+          .select()
+          .eq('room_id', _roomId!)
+          .order('created_at', ascending: true)
+          .limit(500);
+      if (!mounted) return;
+      _mergeMessages(List<Map<String, dynamic>>.from(rows));
+    } catch (_) {}
+  }
+
+  void _upsertMessage(Map<String, dynamic> msg) {
+    if (!mounted) return;
+    final incomingId = msg['id']?.toString();
+    setState(() {
+      final idx = incomingId == null
+          ? -1
+          : _messages.indexWhere((m) => m['id']?.toString() == incomingId);
+      if (idx >= 0) {
+        _messages[idx] = msg;
+      } else {
+        _messages.add(msg);
+      }
+      _messages.sort((a, b) =>
+          (a['created_at']?.toString() ?? '').compareTo(b['created_at']?.toString() ?? ''));
+    });
+  }
+
+  void _mergeMessages(List<Map<String, dynamic>> incoming) {
+    if (!mounted) return;
+    setState(() {
+      final byId = <String, Map<String, dynamic>>{};
+      for (final m in _messages) {
+        final id = m['id']?.toString();
+        if (id != null) byId[id] = m;
+      }
+      for (final m in incoming) {
+        final id = m['id']?.toString();
+        if (id != null) byId[id] = m;
+      }
+      _messages = byId.values.toList()
+        ..sort((a, b) =>
+            (a['created_at']?.toString() ?? '').compareTo(b['created_at']?.toString() ?? ''));
+    });
   }
 
   Future<void> _joinRoom() async {
@@ -74,12 +135,21 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
         roomId = created['id'] as String;
       }
 
-      // 메시지 스트림 구독
-      _messagesStream = Supabase.instance.client
+      // 메시지 스트림 구독 (실시간)
+      _messagesSubscription = Supabase.instance.client
           .from('group_messages')
           .stream(primaryKey: ['id'])
           .eq('room_id', roomId)
-          .order('created_at', ascending: true);
+          .order('created_at', ascending: true)
+          .listen((data) {
+        if (mounted) {
+          _mergeMessages(List<Map<String, dynamic>>.from(data));
+          _scrollToBottom();
+        }
+      });
+
+      _startMessagesPollingFallback();
+      _fetchMessagesOnce();
 
       if (mounted) {
         setState(() {
@@ -105,12 +175,13 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
     if (content.isEmpty || _roomId == null) return;
     _controller.clear();
     try {
-      await Supabase.instance.client.from('group_messages').insert({
+      final inserted = await Supabase.instance.client.from('group_messages').insert({
         'room_id': _roomId,
         'user_id': _myId,
         'user_nickname': _myNickname,
         'content': content,
-      });
+      }).select().single();
+      _upsertMessage(Map<String, dynamic>.from(inserted));
       _scrollToBottom();
     } catch (e) {
       if (mounted) {
@@ -184,18 +255,8 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                   children: [
                     // 메시지 목록
                     Expanded(
-                      child: StreamBuilder<List<Map<String, dynamic>>>(
-                        stream: _messagesStream,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return const Center(
-                                child: CircularProgressIndicator(
-                                    color: Color(0xFF00E676)));
-                          }
-                          final messages = snapshot.data ?? [];
-                          if (messages.isEmpty) {
-                            return Center(
+                      child: _messages.isEmpty
+                          ? Center(
                               child: Column(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
@@ -207,19 +268,14 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                           color: subColor, fontSize: 15)),
                                 ],
                               ),
-                            );
-                          }
-
-                          WidgetsBinding.instance.addPostFrameCallback(
-                              (_) => _scrollToBottom());
-
-                          return ListView.builder(
+                            )
+                          : ListView.builder(
                             controller: _scrollController,
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 8),
-                            itemCount: messages.length,
+                            itemCount: _messages.length,
                             itemBuilder: (context, index) {
-                              final msg = messages[index];
+                              final msg = _messages[index];
                               final isMe = msg['user_id'] == _myId;
                               final nickname =
                                   msg['user_nickname'] as String? ?? '사용자';
@@ -236,7 +292,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                 dateSeparator = _DateChip(
                                     date: '${dt.month}월 ${dt.day}일');
                               } else {
-                                final prev = messages[index - 1];
+                                final prev = _messages[index - 1];
                                 final prevDt = DateTime.parse(
                                         prev['created_at'] as String)
                                     .toLocal();
@@ -252,7 +308,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
 
                               return Column(
                                 children: [
-                                  ?dateSeparator,
+                                  if (dateSeparator != null) dateSeparator,
                                   Padding(
                                     padding: const EdgeInsets.symmetric(
                                         vertical: 3),
@@ -371,9 +427,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                 ],
                               );
                             },
-                          );
-                        },
-                      ),
+                          ),
                     ),
 
                     // 입력창

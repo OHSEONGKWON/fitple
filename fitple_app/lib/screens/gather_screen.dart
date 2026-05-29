@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'gather_edit_screen.dart';
 import 'chat_room_screen.dart';
@@ -97,6 +98,23 @@ class _GatherScreenState extends State<GatherScreen> {
     );
     if (confirm != true) return;
     try {
+      // 모집글 삭제 전에 채팅방이 모집글 FK/연결로 같이 지워지지 않도록 분리합니다.
+      await Supabase.instance.client
+          .from('chat_rooms')
+          .update({
+            'gathering_id': null,
+            'gathering_title': '[삭제된 모집글]',
+          })
+          .eq('gathering_id', id);
+
+      await Supabase.instance.client
+          .from('group_chat_rooms')
+          .update({
+            'gathering_id': null,
+            'gathering_title': '[삭제된 모집글]',
+          })
+          .eq('gathering_id', id);
+
       await Supabase.instance.client.from('gatherings').delete().eq('id', id);
       _loadGatherings();
     } catch (e) {
@@ -109,16 +127,25 @@ class _GatherScreenState extends State<GatherScreen> {
   }
 
   Future<void> _toggleClosed(String id, bool isClosed) async {
-    // 현재는 모집 마감 시 삭제하는 방식으로 처리합니다.
-    if (isClosed) {
+    try {
+      await Supabase.instance.client
+          .from('gatherings')
+          .update({'is_closed': !isClosed})
+          .eq('id', id);
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('재모집 기능은 현재 지원되지 않습니다.')),
+          SnackBar(content: Text(!isClosed ? '모집이 마감되었습니다.' : '모집을 다시 열었습니다.')),
         );
       }
-      return;
+      _loadGatherings();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('마감 상태 변경 실패: $e')),
+        );
+      }
     }
-    await _deleteGathering(id);
   }
 
   String _formatTimeAgo(String createdAt) {
@@ -215,11 +242,15 @@ class _GatherScreenState extends State<GatherScreen> {
                           ),
                           IconButton(
                             onPressed: () async {
+                              if (kIsWeb) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('웹에서는 간소화된 모집 작성 화면으로 이동합니다.')),
+                                );
+                              }
                               final result = await Navigator.push<bool>(
                                 context,
                                 MaterialPageRoute(
                                   builder: (context) => const GatherEditScreen(),
-                                  fullscreenDialog: true,
                                 ),
                               );
                               if (result == true) _loadGatherings();
@@ -387,7 +418,6 @@ class _GatherScreenState extends State<GatherScreen> {
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) => GatherEditScreen(initialData: g),
-                                    fullscreenDialog: true,
                                   ),
                                 );
                                 if (result == true) _loadGatherings();
@@ -408,11 +438,15 @@ class _GatherScreenState extends State<GatherScreen> {
           height: 45,
           child: FloatingActionButton.extended(
             onPressed: () async {
+              if (kIsWeb) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('웹에서는 간소화된 모집 작성 화면으로 이동합니다.')),
+                );
+              }
               final result = await Navigator.push<bool>(
                 context,
                 MaterialPageRoute(
                   builder: (context) => const GatherEditScreen(),
-                  fullscreenDialog: true,
                 ),
               );
               if (result == true) _loadGatherings();
@@ -878,7 +912,7 @@ class _RecruitmentCardState extends State<RecruitmentCard>
                 const SizedBox(height: 14),
 
                 // 채팅하기 (비작성자) or 마감하기/재모집 (작성자)
-                if (isAuthor)
+                if (isAuthor) ...[
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: SizedBox(
@@ -915,7 +949,41 @@ class _RecruitmentCardState extends State<RecruitmentCard>
                         ),
                       ),
                     ),
-                  )
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => GroupChatScreen(
+                              gatheringId: widget.gatheringId,
+                              gatheringTitle: widget.gatheringTitle,
+                              hostId: widget.authorId,
+                              hostNickname: widget.hostNickname,
+                            ),
+                          ),
+                        ),
+                        icon: const Icon(Icons.forum_outlined,
+                            size: 18, color: Colors.black),
+                        label: const Text('팀 채팅하기',
+                            style: TextStyle(
+                                color: Colors.black,
+                                fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF00E676),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ]
                 else
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),

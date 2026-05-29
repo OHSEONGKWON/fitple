@@ -26,8 +26,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final ImagePicker _imagePicker = ImagePicker();
-  late final Stream<List<Map<String, dynamic>>> _messagesStream;
+  List<Map<String, dynamic>> _messages = [];
+  StreamSubscription<List<Map<String, dynamic>>>? _messagesSubscription;
   StreamSubscription? _roomSubscription;
+  Timer? _messagesPollingTimer;
 
   String? _myRole;
   DateTime? _otherLastReadAt;
@@ -39,12 +41,81 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   void initState() {
     super.initState();
     NotificationService.activeChatRoomId = widget.roomId;
-    _messagesStream = Supabase.instance.client
+    _messagesSubscription = Supabase.instance.client
         .from('messages')
         .stream(primaryKey: ['id'])
         .eq('room_id', widget.roomId)
-        .order('created_at', ascending: true);
+        .order('created_at', ascending: true)
+        .listen((data) {
+      if (mounted) {
+        _mergeMessages(List<Map<String, dynamic>>.from(data));
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_myRole != null) _updateLastReadAt(_myRole!);
+          _scrollToBottom();
+        });
+      }
+    });
+    _startMessagesPollingFallback();
+    _fetchMessagesOnce();
     _subscribeToRoom();
+  }
+
+  void _startMessagesPollingFallback() {
+    _messagesPollingTimer?.cancel();
+    _messagesPollingTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _fetchMessagesOnce(),
+    );
+  }
+
+  Future<void> _fetchMessagesOnce() async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('messages')
+          .select()
+          .eq('room_id', widget.roomId)
+          .order('created_at', ascending: true)
+          .limit(500);
+      if (!mounted) return;
+      _mergeMessages(List<Map<String, dynamic>>.from(rows));
+    } catch (_) {}
+  }
+
+  void _upsertMessage(Map<String, dynamic> msg) {
+    if (!mounted) return;
+    final incomingId = msg['id']?.toString();
+    setState(() {
+      final idx = incomingId == null
+          ? -1
+          : _messages.indexWhere((m) => m['id']?.toString() == incomingId);
+      if (idx >= 0) {
+        _messages[idx] = msg;
+      } else {
+        _messages.add(msg);
+      }
+      _messages.sort((a, b) =>
+          (a['created_at']?.toString() ?? '').compareTo(b['created_at']?.toString() ?? ''));
+    });
+  }
+
+  void _mergeMessages(List<Map<String, dynamic>> incoming) {
+    if (!mounted) return;
+    setState(() {
+      final byId = <String, Map<String, dynamic>>{};
+      for (final m in _messages) {
+        final id = m['id']?.toString();
+        if (id != null) byId[id] = m;
+      }
+      for (final m in incoming) {
+        final id = m['id']?.toString();
+        if (id != null) {
+          byId[id] = m;
+        }
+      }
+      _messages = byId.values.toList()
+        ..sort((a, b) =>
+            (a['created_at']?.toString() ?? '').compareTo(b['created_at']?.toString() ?? ''));
+    });
   }
 
   void _subscribeToRoom() {
@@ -84,10 +155,48 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         .eq('id', widget.roomId);
   }
 
+  Future<void> _leaveChatRoom() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('채팅방 나가기'),
+        content: const Text('이 개인 채팅방을 나가시겠어요?\n채팅방 목록에서 사라집니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('나가기', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      await Supabase.instance.client
+          .from('chat_rooms')
+          .delete()
+          .eq('id', widget.roomId);
+
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('채팅방 나가기 실패: $e')),
+      );
+    }
+  }
+
   @override
   void dispose() {
     NotificationService.activeChatRoomId = null;
+    _messagesSubscription?.cancel();
     _roomSubscription?.cancel();
+    _messagesPollingTimer?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -105,7 +214,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     setState(() => _replyToMessage = null);
 
     try {
-      await Supabase.instance.client.from('messages').insert({
+      final inserted = await Supabase.instance.client.from('messages').insert({
         'room_id': widget.roomId,
         'sender_id': user.id,
         'sender_nickname':
@@ -117,7 +226,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           'reply_to_content': reply['message_type'] == 'image'
               ? '📷 사진'
               : (reply['content'] ?? ''),
-      });
+      }).select().single();
+
+      _upsertMessage(Map<String, dynamic>.from(inserted));
 
       if (_myRole != null) _updateLastReadAt(_myRole!);
       _scrollToBottom();
@@ -166,7 +277,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
       final reply = _replyToMessage;
       setState(() => _replyToMessage = null);
 
-      await Supabase.instance.client.from('messages').insert({
+      final inserted = await Supabase.instance.client.from('messages').insert({
         'room_id': widget.roomId,
         'sender_id': user.id,
         'sender_nickname':
@@ -179,7 +290,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           'reply_to_content': reply['message_type'] == 'image'
               ? '📷 사진'
               : (reply['content'] ?? ''),
-      });
+      }).select().single();
+
+      _upsertMessage(Map<String, dynamic>.from(inserted));
 
       if (_myRole != null) _updateLastReadAt(_myRole!);
       _scrollToBottom();
@@ -483,7 +596,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         if (location != null) '📍 $location',
       ];
 
-      await Supabase.instance.client.from('messages').insert({
+      final inserted = await Supabase.instance.client.from('messages').insert({
         'room_id': widget.roomId,
         'sender_id': user.id,
         'sender_nickname': myNickname,
@@ -491,7 +604,9 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         'message_type': 'schedule_proposal',
         'schedule_id': scheduleId,
         'schedule_status': 'pending',
-      });
+      }).select().single();
+
+      _upsertMessage(Map<String, dynamic>.from(inserted));
 
       if (_myRole != null) _updateLastReadAt(_myRole!);
       _scrollToBottom();
@@ -564,99 +679,80 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           IconButton(
             icon: const Icon(Icons.exit_to_app),
             tooltip: '나가기',
-            onPressed: () => Navigator.pop(context),
+            onPressed: _leaveChatRoom,
           ),
         ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: _messagesStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(
-                        color: Color(0xFF00E676)),
-                  );
-                }
-                final messages = snapshot.data ?? [];
-                if (messages.isEmpty) {
-                  return Center(
+            child: _messages.isEmpty
+                ? Center(
                     child: Text(
                       '첫 메시지를 보내보세요! 💬',
                       style: TextStyle(color: subTextColor, fontSize: 15),
                     ),
-                  );
-                }
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) {
+                      final msg = _messages[index];
+                      final isMe = msg['sender_id'] == currentUserId;
 
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (_myRole != null) _updateLastReadAt(_myRole!);
-                  _scrollToBottom();
-                });
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 12),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final msg = messages[index];
-                    final isMe = msg['sender_id'] == currentUserId;
-
-                    bool isRead = false;
-                    if (isMe && _otherLastReadAt != null) {
-                      final msgTime =
-                          DateTime.tryParse(msg['created_at'] ?? '');
-                      if (msgTime != null) {
-                        isRead = !_otherLastReadAt!.isBefore(msgTime);
+                      bool isRead = false;
+                      if (isMe && _otherLastReadAt != null) {
+                        final msgTime =
+                            DateTime.tryParse(msg['created_at'] ?? '');
+                        if (msgTime != null) {
+                          isRead = !_otherLastReadAt!.isBefore(msgTime);
+                        }
                       }
-                    }
 
-                    // 일정 제안 버블
-                    if (msg['message_type'] == 'schedule_proposal') {
+                      // 일정 제안 버블
+                      if (msg['message_type'] == 'schedule_proposal') {
+                        return GestureDetector(
+                          onLongPress: () =>
+                              setState(() => _replyToMessage = msg),
+                          child: _ScheduleProposalBubble(
+                            message: msg,
+                            isMe: isMe,
+                            isDarkMode: isDarkMode,
+                          ),
+                        );
+                      }
+
+                      // 답장 원본 메시지의 닉네임 조회
+                      String? replySenderNickname;
+                      if (msg['reply_to_message_id'] != null) {
+                        final original = _messages.firstWhere(
+                          (m) => m['id'] == msg['reply_to_message_id'],
+                          orElse: () => {},
+                        );
+                        replySenderNickname =
+                            original['sender_nickname'] as String?;
+                      }
+
                       return GestureDetector(
                         onLongPress: () =>
                             setState(() => _replyToMessage = msg),
-                        child: _ScheduleProposalBubble(
-                          message: msg,
+                        child: _MessageBubble(
+                          message: msg['content'] ?? '',
                           isMe: isMe,
+                          isRead: isRead,
+                          senderNickname: msg['sender_nickname'] ?? '',
+                          createdAt: msg['created_at'] ?? '',
                           isDarkMode: isDarkMode,
+                          messageType: msg['message_type'] ?? 'text',
+                          imageUrl: msg['image_url'] as String?,
+                          replyContent: msg['reply_to_content'] as String?,
+                          replySenderNickname: replySenderNickname,
                         ),
                       );
-                    }
-
-                    // 답장 원본 메시지의 닉네임 조회
-                    String? replySenderNickname;
-                    if (msg['reply_to_message_id'] != null) {
-                      final original = messages.firstWhere(
-                        (m) => m['id'] == msg['reply_to_message_id'],
-                        orElse: () => {},
-                      );
-                      replySenderNickname =
-                          original['sender_nickname'] as String?;
-                    }
-
-                    return GestureDetector(
-                      onLongPress: () =>
-                          setState(() => _replyToMessage = msg),
-                      child: _MessageBubble(
-                        message: msg['content'] ?? '',
-                        isMe: isMe,
-                        isRead: isRead,
-                        senderNickname: msg['sender_nickname'] ?? '',
-                        createdAt: msg['created_at'] ?? '',
-                        isDarkMode: isDarkMode,
-                        messageType: msg['message_type'] ?? 'text',
-                        imageUrl: msg['image_url'] as String?,
-                        replyContent: msg['reply_to_content'] as String?,
-                        replySenderNickname: replySenderNickname,
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+                    },
+                  ),
           ),
 
           // 답장 미리보기 바

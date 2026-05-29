@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter_naver_map/flutter_naver_map.dart';
-import 'map_picker_screen.dart';
 
 class GatherEditScreen extends StatefulWidget {
   final Map<String, dynamic>? initialData;
@@ -23,9 +22,9 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
   // 2. 선택 상태 변수들
   String _selectedCategory = '축구'; // 기본 선택 종목
   DateTimeRange? _selectedDateRange; // 모집 날짜 범위
-  NLatLng? _pickedLatLng; // 지도에서 선택한 좌표
   int _actualParticipantCount = 1;
   bool _isLoadingParticipantFloor = false;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -61,21 +60,12 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
   }
 
   Future<void> _openMapPicker() async {
-    final result = await Navigator.push<Map<String, dynamic>>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => MapPickerScreen(initialLatLng: _pickedLatLng),
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('현재 지도 선택은 잠시 비활성화되어 있어요. 장소를 직접 입력해주세요.'),
       ),
     );
-    if (result != null) {
-      setState(() {
-        _pickedLatLng = result['latLng'] as NLatLng?;
-        final address = result['address'] as String? ?? '';
-        if (address.isNotEmpty) {
-          _locationController.text = address;
-        }
-      });
-    }
   }
 
   int _parseControllerInt(TextEditingController controller, int fallback) {
@@ -175,6 +165,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
 
   // 💡 작성 완료(저장) 함수
   Future<void> _submitGather() async {
+    if (_isSubmitting) return;
     // 1. 유효성 검사 (제목이나 내용이 비어있는지 확인)
     if (_titleController.text.trim().isEmpty || _descriptionController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -229,6 +220,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
     }
 
     final isEdit = widget.initialData != null;
+    setState(() => _isSubmitting = true);
     try {
       if (isEdit) {
         final actualParticipants = await _fetchActualParticipantCount();
@@ -289,7 +281,133 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(isEdit ? '수정 실패: $e' : '등록 실패: $e')),
       );
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  Widget _buildWebForm(bool isDarkMode, TextStyle labelStyle) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('모집 종목', style: labelStyle),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: ['축구', '족구', '배구', '배드민턴', '헬스', '러닝', '기타']
+                .map((category) {
+              final isSelected = _selectedCategory == category;
+              return ChoiceChip(
+                label: Text(category),
+                selected: isSelected,
+                onSelected: (selected) {
+                  if (selected) {
+                    setState(() => _selectedCategory = category);
+                  }
+                },
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
+          Text('제목', style: labelStyle),
+          const SizedBox(height: 8),
+          TextField(controller: _titleController),
+          const SizedBox(height: 20),
+          Text('상세 내용', style: labelStyle),
+          const SizedBox(height: 8),
+          TextField(controller: _descriptionController, maxLines: 5),
+          const SizedBox(height: 20),
+          Text('모집 기간', style: labelStyle),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: _selectDateRange,
+            child: Text(
+              _selectedDateRange == null
+                  ? '시작일과 종료일 선택'
+                  : '${_selectedDateRange!.start.month}월 ${_selectedDateRange!.start.day}일 ~ ${_selectedDateRange!.end.month}월 ${_selectedDateRange!.end.day}일',
+            ),
+          ),
+          const SizedBox(height: 20),
+          Text('모집 인원 (본인 제외)', style: labelStyle),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _minMembersController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(hintText: '최소'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _maxMembersController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(hintText: '최대'),
+                ),
+              ),
+            ],
+          ),
+          if (widget.initialData != null) ...[
+            const SizedBox(height: 12),
+            Text('현재 모집 인원', style: labelStyle),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: () => _adjustCurrentMembers(-1),
+                  icon: const Icon(Icons.remove),
+                ),
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      '${_parseControllerInt(_currentMembersController, 1)}명',
+                      style: TextStyle(
+                        color: isDarkMode ? Colors.white : Colors.black,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => _adjustCurrentMembers(1),
+                  icon: const Icon(Icons.add),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 20),
+          Text('장소', style: labelStyle),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _locationController,
+            decoration: const InputDecoration(hintText: '장소를 직접 입력해주세요'),
+          ),
+          const SizedBox(height: 28),
+          ElevatedButton(
+            onPressed: _isSubmitting ? null : _submitGather,
+            child: _isSubmitting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Text(widget.initialData != null ? '모집글 수정하기' : '모집글 등록하기'),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
   }
 
   @override
@@ -305,7 +423,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
       appBar: AppBar(
         title: Text(
           widget.initialData != null ? '모집글 수정하기' : '새 크루 모집하기',
-          style: const TextStyle(fontWeight: FontWeight(700)),
+          style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         backgroundColor: isDarkMode ? const Color(0xFF121212) : Colors.white,
         elevation: 0,
@@ -314,7 +432,9 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
-      body: SingleChildScrollView(
+      body: kIsWeb
+          ? _buildWebForm(isDarkMode, labelStyle)
+          : SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(20.0),
           child: Column(
@@ -588,10 +708,18 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                       ),
                       icon: const Icon(Icons.map_outlined, size: 20),
-                      label: const Text('지도 선택'),
+                      label: const Text('지도 선택(준비중)'),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '장소명/동네를 직접 입력해주세요.',
+                style: TextStyle(
+                  color: isDarkMode ? Colors.white54 : Colors.black54,
+                  fontSize: 12,
+                ),
               ),
               const SizedBox(height: 40),
 
@@ -601,18 +729,26 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
               SizedBox(
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _submitGather,
+                  onPressed: _isSubmitting ? null : _submitGather,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00E676),
                     foregroundColor: Colors.black,
+                    disabledBackgroundColor: const Color(0xFF00E676).withValues(alpha: 0.6),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: Text(
-                    widget.initialData != null ? '모집글 수정하기' : '모집글 등록하기',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 22, height: 22,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5, color: Colors.black,
+                          ),
+                        )
+                      : Text(
+                          widget.initialData != null ? '모집글 수정하기' : '모집글 등록하기',
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
                 ),
               ),
               const SizedBox(height: 12),

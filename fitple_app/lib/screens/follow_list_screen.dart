@@ -18,16 +18,45 @@ class FollowListScreen extends StatefulWidget {
 
 class _FollowListScreenState extends State<FollowListScreen> {
   List<Map<String, dynamic>> _users = [];
-  // 내가 팔로잉 중인 유저 ID 세트 (버튼 상태용)
-  Set<String> _myFollowingIds = {};
   bool _isLoading = true;
-  final String _currentUserId =
-      Supabase.instance.client.auth.currentUser?.id ?? '';
+  bool _isMyProfile = false;
 
   @override
   void initState() {
     super.initState();
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    _isMyProfile = currentUserId != null && currentUserId == widget.userId;
     _loadList();
+  }
+
+  Future<void> _removeFollower(String followerUserId) async {
+    try {
+      final deleted = await Supabase.instance.client
+          .from('follows')
+          .delete()
+          .eq('follower_id', followerUserId)
+          .eq('following_id', widget.userId)
+          .select();
+      if (!mounted) return;
+      if ((deleted as List).isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('삭제 권한이 없습니다. Supabase RLS 정책을 확인해주세요.')),
+        );
+        return;
+      }
+      setState(() {
+        _users.removeWhere((u) => u['userId'] == followerUserId);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('팔로워를 삭제했습니다.')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('삭제에 실패했습니다: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _loadList() async {
@@ -49,15 +78,6 @@ class _FollowListScreenState extends State<FollowListScreen> {
             .order('created_at', ascending: false);
       }
 
-      // 내가 팔로잉 중인 ID 목록 (버튼 상태용)
-      final myFollowing = await Supabase.instance.client
-          .from('follows')
-          .select('following_id')
-          .eq('follower_id', _currentUserId);
-
-      final followingIds =
-          (myFollowing as List).map((f) => f['following_id'] as String).toSet();
-
       if (mounted) {
         setState(() {
           _users = data.map((item) {
@@ -73,7 +93,6 @@ class _FollowListScreenState extends State<FollowListScreen> {
               };
             }
           }).toList();
-          _myFollowingIds = followingIds;
           _isLoading = false;
         });
       }
@@ -82,66 +101,11 @@ class _FollowListScreenState extends State<FollowListScreen> {
     }
   }
 
-  Future<void> _toggleFollow(String targetId, String targetNickname) async {
-    final isFollowing = _myFollowingIds.contains(targetId);
-    // 낙관적 업데이트
-    setState(() {
-      if (isFollowing) {
-        _myFollowingIds.remove(targetId);
-      } else {
-        _myFollowingIds.add(targetId);
-      }
-    });
-    try {
-      if (isFollowing) {
-        await Supabase.instance.client
-            .from('follows')
-            .delete()
-            .eq('follower_id', _currentUserId)
-            .eq('following_id', targetId);
-        // 팔로잉 목록에서 보이는 경우 행도 제거
-        if (!widget.isFollowers && widget.userId == _currentUserId) {
-          setState(() => _users.removeWhere((u) => u['userId'] == targetId));
-        }
-      } else {
-        final myNickname =
-            Supabase.instance.client.auth.currentUser?.userMetadata?['display_name']
-                as String? ?? '사용자';
-        await Supabase.instance.client.from('follows').insert({
-          'follower_id': _currentUserId,
-          'follower_nickname': myNickname,
-          'following_id': targetId,
-          'following_nickname': targetNickname,
-        });
-      }
-    } catch (_) {
-      // 롤백
-      setState(() {
-        if (isFollowing) {
-          _myFollowingIds.add(targetId);
-        } else {
-          _myFollowingIds.remove(targetId);
-        }
-      });
-    }
-  }
-
-  Future<void> _removeFollower(String followerId) async {
-    // 내 팔로워 강제 삭제
-    await Supabase.instance.client
-        .from('follows')
-        .delete()
-        .eq('follower_id', followerId)
-        .eq('following_id', _currentUserId);
-    setState(() => _users.removeWhere((u) => u['userId'] == followerId));
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDarkMode ? Colors.white : Colors.black;
     final subColor = isDarkMode ? Colors.white54 : Colors.black54;
-    final isMyProfile = widget.userId == _currentUserId;
 
     return Scaffold(
       backgroundColor:
@@ -181,10 +145,15 @@ class _FollowListScreenState extends State<FollowListScreen> {
                     final user = _users[index];
                     final uid = user['userId'] as String;
                     final nickname = user['nickname'] as String;
-                    final isMe = uid == _currentUserId;
-                    final amFollowing = _myFollowingIds.contains(uid);
 
                     return ListTile(
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              UserProfileScreen(userId: uid, nickname: nickname),
+                        ),
+                      ),
                       contentPadding: const EdgeInsets.symmetric(
                           horizontal: 20, vertical: 4),
                       leading: GestureDetector(
@@ -215,78 +184,42 @@ class _FollowListScreenState extends State<FollowListScreen> {
                             style: TextStyle(
                                 color: textColor, fontWeight: FontWeight.w600)),
                       ),
-                      trailing: isMe
-                          ? null
-                          : widget.isFollowers && isMyProfile
-                              ? // 내 팔로워 → 삭제 버튼
-                              TextButton(
-                                  onPressed: () => _showRemoveDialog(uid, nickname),
-                                  child: const Text('삭제',
-                                      style: TextStyle(
-                                          color: Colors.redAccent,
-                                          fontWeight: FontWeight.bold)),
-                                )
-                              : // 팔로잉 목록 또는 다른 유저의 목록 → 팔로우/언팔로우
-                              SizedBox(
-                                  width: 90,
-                                  height: 34,
-                                  child: OutlinedButton(
-                                    onPressed: () =>
-                                        _toggleFollow(uid, nickname),
-                                    style: OutlinedButton.styleFrom(
-                                      backgroundColor: amFollowing
-                                          ? Colors.transparent
-                                          : const Color(0xFF00E676),
-                                      side: BorderSide(
-                                        color: amFollowing
-                                            ? (isDarkMode
-                                                ? Colors.white24
-                                                : Colors.black26)
-                                            : const Color(0xFF00E676),
+                      trailing: _isMyProfile && widget.isFollowers
+                          ? IconButton(
+                              icon: const Icon(Icons.person_remove_outlined,
+                                  color: Colors.redAccent),
+                              onPressed: () async {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (_) => AlertDialog(
+                                    title: const Text('팔로워 삭제'),
+                                    content: Text(
+                                        '$nickname님을 팔로워에서 삭제할까요?'),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, false),
+                                        child: const Text('취소'),
                                       ),
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(8)),
-                                      padding: EdgeInsets.zero,
-                                    ),
-                                    child: Text(
-                                      amFollowing ? '팔로잉' : '팔로우',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.bold,
-                                        color: amFollowing
-                                            ? subColor
-                                            : Colors.black,
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.pop(context, true),
+                                        child: const Text('삭제',
+                                            style: TextStyle(
+                                                color: Colors.redAccent)),
                                       ),
-                                    ),
+                                    ],
                                   ),
-                                ),
+                                );
+                                if (confirm == true) {
+                                  await _removeFollower(uid);
+                                }
+                              },
+                            )
+                          : Icon(Icons.chevron_right, color: subColor),
                     );
                   },
                 ),
-    );
-  }
-
-  void _showRemoveDialog(String uid, String nickname) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('팔로워 삭제'),
-        content: Text('$nickname 님을 팔로워 목록에서 삭제할까요?'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('취소')),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _removeFollower(uid);
-            },
-            child: const Text('삭제',
-                style: TextStyle(color: Colors.redAccent)),
-          ),
-        ],
-      ),
     );
   }
 }

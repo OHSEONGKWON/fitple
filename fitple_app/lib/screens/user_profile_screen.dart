@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'follow_list_screen.dart';
+import 'post_detail_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String userId;
@@ -26,11 +27,32 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _isPrivate = false;
   double _temperature = 36.5;
   int _temperatureReviewCount = 0;
+  List<Map<String, dynamic>> _posts = [];
+  bool _loadingPosts = true;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _loadUserPosts();
+  }
+
+  Future<void> _loadUserPosts() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('posts')
+          .select()
+          .eq('user_id', widget.userId)
+          .order('created_at', ascending: false);
+      if (mounted) {
+        setState(() {
+          _posts = List<Map<String, dynamic>>.from(data as List);
+          _loadingPosts = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingPosts = false);
+    }
   }
 
   Future<void> _loadData() async {
@@ -39,6 +61,16 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
+
+    bool isFollowing = _isFollowing;
+    bool hasPendingRequest = _hasPendingRequest;
+    int followerCount = _followerCount;
+    int followingCount = _followingCount;
+    bool isPrivate = _isPrivate;
+    double temperature = _temperature;
+    int temperatureReviewCount = _temperatureReviewCount;
+
+    // 팔로우 핵심 정보는 먼저 가져오고, 일부 부가 정보 실패가 전체를 망치지 않게 분리합니다.
     try {
       final followCheck = await Supabase.instance.client
           .from('follows')
@@ -46,12 +78,79 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           .eq('follower_id', me.id)
           .eq('following_id', widget.userId)
           .maybeSingle();
+      isFollowing = followCheck != null;
+    } catch (_) {}
 
+    try {
       final requestCheck = await Supabase.instance.client
           .from('follow_requests')
           .select('id')
           .eq('requester_id', me.id)
           .eq('target_id', widget.userId)
+          .maybeSingle();
+      hasPendingRequest = requestCheck != null;
+    } catch (_) {
+      hasPendingRequest = false;
+    }
+
+    try {
+      final followerList = await Supabase.instance.client
+          .from('follows')
+          .select('id')
+          .eq('following_id', widget.userId);
+      followerCount = (followerList as List).length;
+    } catch (_) {}
+
+    try {
+      final followingList = await Supabase.instance.client
+          .from('follows')
+          .select('id')
+          .eq('follower_id', widget.userId);
+      followingCount = (followingList as List).length;
+    } catch (_) {}
+
+    try {
+      final settings = await Supabase.instance.client
+          .from('user_settings')
+          .select('is_private')
+          .eq('user_id', widget.userId)
+          .maybeSingle();
+      isPrivate = settings?['is_private'] as bool? ?? false;
+    } catch (_) {}
+
+    try {
+      final tempRow = await Supabase.instance.client
+          .from('user_temperature')
+          .select('temperature, review_count')
+          .eq('user_id', widget.userId)
+          .maybeSingle();
+      temperature = (tempRow?['temperature'] as num?)?.toDouble() ?? 36.5;
+      temperatureReviewCount = (tempRow?['review_count'] as num?)?.toInt() ?? 0;
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() {
+      _isFollowing = isFollowing;
+      _hasPendingRequest = hasPendingRequest;
+      _followerCount = followerCount;
+      _followingCount = followingCount;
+      _isPrivate = isPrivate;
+      _temperature = temperature;
+      _temperatureReviewCount = temperatureReviewCount;
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _refreshFollowMeta() async {
+    final me = Supabase.instance.client.auth.currentUser;
+    if (me == null) return;
+
+    try {
+      final followCheck = await Supabase.instance.client
+          .from('follows')
+          .select('id')
+          .eq('follower_id', me.id)
+          .eq('following_id', widget.userId)
           .maybeSingle();
 
       final followerList = await Supabase.instance.client
@@ -64,32 +163,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           .select('id')
           .eq('follower_id', widget.userId);
 
-      final settings = await Supabase.instance.client
-          .from('user_settings')
-          .select('is_private')
-          .eq('user_id', widget.userId)
-          .maybeSingle();
-
-        final tempRow = await Supabase.instance.client
-          .from('user_temperature')
-          .select('temperature, review_count')
-          .eq('user_id', widget.userId)
-          .maybeSingle();
-
-      if (mounted) {
-        setState(() {
-          _isFollowing = followCheck != null;
-          _hasPendingRequest = requestCheck != null;
-          _followerCount = (followerList as List).length;
-          _followingCount = (followingList as List).length;
-          _isPrivate = settings?['is_private'] as bool? ?? false;
-          _temperature = (tempRow?['temperature'] as num?)?.toDouble() ?? 36.5;
-          _temperatureReviewCount = (tempRow?['review_count'] as num?)?.toInt() ?? 0;
-          _isLoading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _isFollowing = followCheck != null;
+        _followerCount = (followerList as List).length;
+        _followingCount = (followingList as List).length;
+      });
     } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+      // 재조회 실패 시 기존 화면값을 유지합니다.
     }
   }
 
@@ -107,7 +188,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             .delete()
             .eq('follower_id', me.id)
             .eq('following_id', widget.userId);
-        if (mounted) setState(() { _isFollowing = false; _followerCount = (_followerCount - 1).clamp(0, 9999); });
+        await _refreshFollowMeta();
       } else if (_hasPendingRequest) {
         // 요청 취소
         await Supabase.instance.client
@@ -138,6 +219,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         // 공개 계정 → 바로 팔로우
         final myNickname =
             me.userMetadata?['display_name'] as String? ?? '사용자';
+        var inserted = false;
+        var duplicated = false;
         try {
           await Supabase.instance.client.from('follows').insert({
             'follower_id': me.id,
@@ -145,14 +228,30 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             'following_id': widget.userId,
             'following_nickname': widget.nickname,
           });
-        } catch (_) {
-          // 닉네임 컬럼이 없으면 기본 컬럼만으로 재시도
-          await Supabase.instance.client.from('follows').insert({
-            'follower_id': me.id,
-            'following_id': widget.userId,
-          });
+          inserted = true;
+        } on PostgrestException catch (e) {
+          if (e.code == '23505') {
+            duplicated = true;
+          } else {
+            // 닉네임 컬럼이 없으면 기본 컬럼만으로 재시도
+            try {
+              await Supabase.instance.client.from('follows').insert({
+                'follower_id': me.id,
+                'following_id': widget.userId,
+              });
+              inserted = true;
+            } on PostgrestException catch (fallbackError) {
+              if (fallbackError.code == '23505') {
+                duplicated = true;
+              } else {
+                rethrow;
+              }
+            }
+          }
         }
-        if (mounted) setState(() { _isFollowing = true; _followerCount++; });
+        if (inserted || duplicated) {
+          await _refreshFollowMeta();
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -433,6 +532,112 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                       ],
                     ),
                   ),
+
+                  // 게시물 섹션 (공개 계정이거나 팔로잉 중일 때)
+                  if (!showPrivateLock) ...[
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          Icon(Icons.grid_on, size: 18, color: subColor),
+                          const SizedBox(width: 8),
+                          Text('게시물',
+                              style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold)),
+                          if (!_loadingPosts) ...[
+                            const SizedBox(width: 6),
+                            Text('${_posts.length}',
+                                style: TextStyle(color: subColor, fontSize: 13)),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (_loadingPosts)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 32),
+                        child: Center(
+                            child: CircularProgressIndicator(
+                                color: Color(0xFF00E676))),
+                      )
+                    else if (_posts.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: Center(
+                          child: Column(
+                            children: [
+                              Icon(Icons.photo_outlined,
+                                  size: 48, color: subColor),
+                              const SizedBox(height: 10),
+                              Text('게시물이 없어요',
+                                  style:
+                                      TextStyle(color: subColor, fontSize: 14)),
+                            ],
+                          ),
+                        ),
+                      )
+                    else
+                      GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 3,
+                          crossAxisSpacing: 2,
+                          mainAxisSpacing: 2,
+                        ),
+                        itemCount: _posts.length,
+                        itemBuilder: (context, index) {
+                          final post = _posts[index];
+                          final imageUrl = post['image_url'] != null
+                              ? Supabase.instance.client.storage
+                                  .from('posts')
+                                  .getPublicUrl(post['image_url'] as String)
+                              : null;
+                          return GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PostDetailScreen(
+                                  post: post,
+                                  isLiked: false,
+                                  likeCount: 0,
+                                ),
+                              ),
+                            ),
+                            child: imageUrl != null
+                                ? Image.network(
+                                    imageUrl,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, e) => Container(
+                                      color: isDarkMode
+                                          ? const Color(0xFF2C2C2C)
+                                          : Colors.grey.shade200,
+                                      child: Icon(Icons.image_outlined,
+                                          color: subColor, size: 28),
+                                    ),
+                                  )
+                                : Container(
+                                    color: isDarkMode
+                                        ? const Color(0xFF2C2C2C)
+                                        : Colors.grey.shade100,
+                                    padding: const EdgeInsets.all(8),
+                                    child: Text(
+                                      post['content'] as String? ?? '',
+                                      style: TextStyle(
+                                          color: textColor, fontSize: 12),
+                                      maxLines: 4,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                          );
+                        },
+                      ),
+                    const SizedBox(height: 40),
+                  ],
                 ],
               ),
             ),
