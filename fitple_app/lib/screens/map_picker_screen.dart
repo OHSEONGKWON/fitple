@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class MapPickerScreen extends StatefulWidget {
-  final LatLng? initialLatLng;
+  final NLatLng? initialLatLng;
 
   const MapPickerScreen({super.key, this.initialLatLng});
 
@@ -14,49 +13,51 @@ class MapPickerScreen extends StatefulWidget {
 }
 
 class _MapPickerScreenState extends State<MapPickerScreen> {
-  // 기본 위치: 서울 시청
-  static const _defaultLatLng = LatLng(37.5665, 126.9780);
+  static const _defaultLatLng = NLatLng(37.5665, 126.9780);
 
-  LatLng? _selectedLatLng;
+  NLatLng? _selectedLatLng;
   String _selectedAddress = '';
   bool _isLoading = false;
-  late final MapController _mapController;
+  NaverMapController? _mapController;
 
   @override
   void initState() {
     super.initState();
-    _mapController = MapController();
     _selectedLatLng = widget.initialLatLng;
     if (widget.initialLatLng != null) {
       _reverseGeocode(widget.initialLatLng!);
     }
   }
 
-  @override
-  void dispose() {
-    _mapController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _reverseGeocode(LatLng latLng) async {
+  Future<void> _reverseGeocode(NLatLng latLng) async {
     setState(() => _isLoading = true);
     try {
       final uri = Uri.parse(
-        'https://nominatim.openstreetmap.org/reverse'
-        '?lat=${latLng.latitude}&lon=${latLng.longitude}'
-        '&format=json&accept-language=ko',
+        'https://naveropenapi.apigw.ntruss.com/map-reversegeocode/v2/gc'
+        '?coords=${latLng.longitude},${latLng.latitude}'
+        '&output=json&orders=roadaddr,addr',
       );
       final response = await http.get(
         uri,
-        headers: {'User-Agent': 'FitpleApp/1.0'},
+        headers: {
+          'X-NCP-APIGW-API-KEY-ID': '6nqz044aws',
+          'X-NCP-APIGW-API-KEY': 'TRuNcSMkqt3m9z3nqcOZ5iL4o2KezgXjQQ3ix4fC',
+        },
       );
       if (response.statusCode == 200) {
         final data = json.decode(response.body) as Map<String, dynamic>;
-        final displayName = data['display_name'] as String? ?? '';
-        // 주소를 간결하게 정리 (한국 주소 앞부분만)
-        final parts = displayName.split(', ');
-        final shortAddress = parts.take(4).join(' ');
-        setState(() => _selectedAddress = shortAddress);
+        final results = data['results'] as List<dynamic>?;
+        if (results != null && results.isNotEmpty) {
+          final region = results[0]['region'] as Map<String, dynamic>;
+          final land = results[0]['land'] as Map<String, dynamic>?;
+          final area1 = region['area1']?['name'] ?? '';
+          final area2 = region['area2']?['name'] ?? '';
+          final area3 = region['area3']?['name'] ?? '';
+          final number1 = land?['number1'] ?? '';
+          final number2 = land?['number2'] ?? '';
+          final numberStr = number2.isNotEmpty ? '$number1-$number2' : number1;
+          setState(() => _selectedAddress = '$area1 $area2 $area3 $numberStr'.trim());
+        }
       }
     } catch (_) {
       setState(() => _selectedAddress =
@@ -101,41 +102,29 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
       ),
       body: Stack(
         children: [
-          // 지도
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: initialCenter,
-              initialZoom: 14,
-              onTap: (tapPos, latLng) {
-                setState(() {
-                  _selectedLatLng = latLng;
-                  _selectedAddress = '';
-                });
-                _reverseGeocode(latLng);
-              },
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.fitple.app',
+          NaverMap(
+            options: NaverMapViewOptions(
+              initialCameraPosition: NCameraPosition(
+                target: initialCenter,
+                zoom: 14,
               ),
-              if (_selectedLatLng != null)
-                MarkerLayer(
-                  markers: [
-                    Marker(
-                      point: _selectedLatLng!,
-                      width: 48,
-                      height: 48,
-                      child: const Icon(
-                        Icons.location_pin,
-                        color: Colors.red,
-                        size: 48,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
+              mapType: NMapType.basic,
+              nightModeEnable: isDarkMode,
+            ),
+            onMapReady: (controller) {
+              _mapController = controller;
+              if (widget.initialLatLng != null) {
+                _updateMarker(widget.initialLatLng!);
+              }
+            },
+            onMapTapped: (point, latLng) {
+              setState(() {
+                _selectedLatLng = latLng;
+                _selectedAddress = '';
+              });
+              _updateMarker(latLng);
+              _reverseGeocode(latLng);
+            },
           ),
 
           // 상단 안내 문구
@@ -256,5 +245,12 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _updateMarker(NLatLng latLng) async {
+    if (_mapController == null) return;
+    await _mapController!.clearOverlays();
+    final marker = NMarker(id: 'selected', position: latLng);
+    await _mapController!.addOverlay(marker);
   }
 }
