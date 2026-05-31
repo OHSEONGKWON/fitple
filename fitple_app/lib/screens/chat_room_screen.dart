@@ -218,18 +218,47 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     );
     if (confirm != true) return;
 
+    // 폴링 타이머를 먼저 중단해 삭제 중 재요청 방지
+    _messagesPollingTimer?.cancel();
+
     try {
+      // 메시지 먼저 삭제 (FK 제약 해소)
       await Supabase.instance.client
+          .from('messages')
+          .delete()
+          .eq('room_id', widget.roomId);
+
+      // 채팅방 삭제 (삭제된 row 반환으로 성공 여부 확인)
+      final deleted = await Supabase.instance.client
           .from('chat_rooms')
           .delete()
-          .eq('id', widget.roomId);
+          .eq('id', widget.roomId)
+          .select('id');
+
+      if (deleted.isEmpty) {
+        throw Exception('채팅방을 삭제할 권한이 없습니다. (RLS 정책 확인 필요)');
+      }
 
       if (!mounted) return;
       Navigator.pop(context, true);
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+      // 재시작 (폴링 복원)
+      _startMessagesPollingFallback();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('채팅방 나가기 실패: ${e.message}'),
+          duration: const Duration(seconds: 4),
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
+      _startMessagesPollingFallback();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('채팅방 나가기 실패: $e')),
+        SnackBar(
+          content: Text('채팅방 나가기 실패: $e'),
+          duration: const Duration(seconds: 4),
+        ),
       );
     }
   }
