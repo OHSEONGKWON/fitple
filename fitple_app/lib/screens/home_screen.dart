@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'chat_list_screen.dart';
 import 'gather_edit_screen.dart';
+import 'gather_screen.dart';
 import 'story_add_screen.dart';
 import 'story_show_screen.dart';
 import 'dart:typed_data';
