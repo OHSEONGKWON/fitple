@@ -33,6 +33,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   String? _myRole;
   DateTime? _otherLastReadAt;
+  DateTime? _lastReadAtUpdate;
   Map<String, dynamic>? _replyToMessage;
   bool _isSendingImage = false;
   bool _isSendingSchedule = false;
@@ -64,7 +65,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     _messagesPollingTimer?.cancel();
     _messagesPollingTimer = Timer.periodic(
       const Duration(seconds: 2),
-      (_) => _fetchMessagesOnce(),
+      (_) {
+        _fetchMessagesOnce();
+        _fetchRoomOnce();
+      },
     );
   }
 
@@ -78,6 +82,39 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           .limit(500);
       if (!mounted) return;
       _mergeMessages(List<Map<String, dynamic>>.from(rows));
+    } catch (_) {}
+  }
+
+  Future<void> _fetchRoomOnce() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    try {
+      final data = await Supabase.instance.client
+          .from('chat_rooms')
+          .select()
+          .eq('id', widget.roomId)
+          .maybeSingle();
+      if (!mounted || data == null) return;
+      final isHost = data['host_id'] == user.id;
+      final role = isHost ? 'host' : 'guest';
+      final otherReadAtStr = isHost
+          ? data['guest_last_read_at'] as String?
+          : data['host_last_read_at'] as String?;
+      final otherReadAt =
+          otherReadAtStr != null ? DateTime.tryParse(otherReadAtStr) : null;
+
+      bool needsRebuild = false;
+      if (_myRole != role) needsRebuild = true;
+      if (otherReadAt != _otherLastReadAt) needsRebuild = true;
+      if (needsRebuild && mounted) {
+        setState(() {
+          _myRole = role;
+          _otherLastReadAt = otherReadAt;
+        });
+      }
+
+      // 채팅방에 있는 동안 내 읽음 시각을 주기적으로 갱신 (채팅 목록 뱃지 해소)
+      _updateLastReadAt(role);
     } catch (_) {}
   }
 
@@ -148,10 +185,16 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   }
 
   Future<void> _updateLastReadAt(String role) async {
+    final now = DateTime.now();
+    if (_lastReadAtUpdate != null &&
+        now.difference(_lastReadAtUpdate!) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastReadAtUpdate = now;
     final col = role == 'host' ? 'host_last_read_at' : 'guest_last_read_at';
     await Supabase.instance.client
         .from('chat_rooms')
-        .update({col: DateTime.now().toUtc().toIso8601String()})
+        .update({col: now.toUtc().toIso8601String()})
         .eq('id', widget.roomId);
   }
 

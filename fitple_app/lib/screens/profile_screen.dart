@@ -28,6 +28,9 @@ class _ProfileScreenState extends State<ProfileScreen>
   int _pendingRequestCount = 0;
 
   List<Map<String, dynamic>> _posts = [];
+  Map<String, int> _likeCounts = {};
+  Map<String, int> _commentCounts = {};
+  Map<String, bool> _likedPosts = {};
   bool _loadingPosts = true;
 
   @override
@@ -126,14 +129,87 @@ class _ProfileScreenState extends State<ProfileScreen>
           .select()
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
+      final posts = List<Map<String, dynamic>>.from(data as List);
+      final postIds = posts.map((p) => p['id'] as String).toList();
+
+      if (postIds.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _posts = posts;
+            _loadingPosts = false;
+          });
+        }
+        return;
+      }
+
+      final likesData = await Supabase.instance.client
+          .from('post_likes')
+          .select('post_id')
+          .inFilter('post_id', postIds);
+      final Map<String, int> likeCounts = {};
+      for (final l in (likesData as List)) {
+        final pid = l['post_id'] as String;
+        likeCounts[pid] = (likeCounts[pid] ?? 0) + 1;
+      }
+
+      final myLikesData = await Supabase.instance.client
+          .from('post_likes')
+          .select('post_id')
+          .eq('user_id', user.id)
+          .inFilter('post_id', postIds);
+      final likedIds =
+          (myLikesData as List).map((l) => l['post_id'] as String).toSet();
+
+      final commentsData = await Supabase.instance.client
+          .from('post_comments')
+          .select('post_id')
+          .inFilter('post_id', postIds);
+      final Map<String, int> commentCounts = {};
+      for (final c in (commentsData as List)) {
+        final pid = c['post_id'] as String;
+        commentCounts[pid] = (commentCounts[pid] ?? 0) + 1;
+      }
+
       if (mounted) {
         setState(() {
-          _posts = List<Map<String, dynamic>>.from(data as List);
+          _posts = posts;
+          _likeCounts = likeCounts;
+          _commentCounts = commentCounts;
+          _likedPosts = {for (final id in postIds) id: likedIds.contains(id)};
           _loadingPosts = false;
         });
       }
     } catch (_) {
       if (mounted) setState(() => _loadingPosts = false);
+    }
+  }
+
+  Future<void> _toggleLike(String postId) async {
+    final me = Supabase.instance.client.auth.currentUser;
+    if (me == null) return;
+    final wasLiked = _likedPosts[postId] ?? false;
+    setState(() {
+      _likedPosts[postId] = !wasLiked;
+      _likeCounts[postId] = (_likeCounts[postId] ?? 0) + (wasLiked ? -1 : 1);
+    });
+    try {
+      if (wasLiked) {
+        await Supabase.instance.client
+            .from('post_likes')
+            .delete()
+            .eq('user_id', me.id)
+            .eq('post_id', postId);
+      } else {
+        await Supabase.instance.client.from('post_likes').insert({
+          'user_id': me.id,
+          'post_id': postId,
+        });
+      }
+    } catch (_) {
+      setState(() {
+        _likedPosts[postId] = wasLiked;
+        _likeCounts[postId] = (_likeCounts[postId] ?? 0) + (wasLiked ? 1 : -1);
+      });
     }
   }
 
@@ -354,8 +430,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         body: TabBarView(
           controller: _tabController,
           children: [
-            // ── 탭 0: 게시물 그리드 ──────────────────────────
-            _buildPostsTab(isDarkMode, textColor, subColor),
+            // ── 탭 0: 게시물 ──────────────────────────
+            _buildPostsTab(isDarkMode, textColor, subColor, nickname),
 
             // ── 탭 1: 정보 ──────────────────────────────────
             _buildInfoTab(
@@ -375,8 +451,19 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
+  String _timeAgo(String? iso) {
+    if (iso == null) return '';
+    final diff = DateTime.now().difference(DateTime.parse(iso));
+    if (diff.inMinutes < 1) return '방금 전';
+    if (diff.inHours < 1) return '${diff.inMinutes}분 전';
+    if (diff.inDays < 1) return '${diff.inHours}시간 전';
+    if (diff.inDays < 7) return '${diff.inDays}일 전';
+    final dt = DateTime.parse(iso);
+    return '${dt.month}월 ${dt.day}일';
+  }
+
   Widget _buildPostsTab(
-      bool isDarkMode, Color textColor, Color subColor) {
+      bool isDarkMode, Color textColor, Color subColor, String nickname) {
     if (_loadingPosts) {
       return const Center(
           child: CircularProgressIndicator(color: Color(0xFF00E676)));
@@ -397,16 +484,20 @@ class _ProfileScreenState extends State<ProfileScreen>
         ),
       );
     }
-    return GridView.builder(
+    final bgColor = isDarkMode ? const Color(0xFF121212) : Colors.white;
+    final divColor =
+        isDarkMode ? Colors.white12 : Colors.grey.shade200;
+
+    return ListView.separated(
       padding: EdgeInsets.zero,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        crossAxisSpacing: 2,
-        mainAxisSpacing: 2,
-      ),
       itemCount: _posts.length,
+      separatorBuilder: (_, _) => Divider(height: 1, color: divColor),
       itemBuilder: (context, index) {
         final post = _posts[index];
+        final postId = post['id'] as String;
+        final isLiked = _likedPosts[postId] ?? false;
+        final likeCount = _likeCounts[postId] ?? 0;
+        final commentCount = _commentCounts[postId] ?? 0;
         final imageUrl = post['image_url'] != null
             ? Supabase.instance.client.storage
                 .from('posts')
@@ -417,33 +508,142 @@ class _ProfileScreenState extends State<ProfileScreen>
             context,
             MaterialPageRoute(
               builder: (_) => PostDetailScreen(
-                  post: post, isLiked: false, likeCount: 0),
+                  post: post, isLiked: isLiked, likeCount: likeCount),
             ),
-          ),
-          child: imageUrl != null
-              ? Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, e, stack) => Container(
-                    color: isDarkMode
-                        ? const Color(0xFF2C2C2C)
-                        : Colors.grey.shade200,
-                    child: Icon(Icons.image_outlined,
-                        color: subColor, size: 28),
-                  ),
-                )
-              : Container(
-                  color: isDarkMode
-                      ? const Color(0xFF2C2C2C)
-                      : Colors.grey.shade100,
-                  padding: const EdgeInsets.all(8),
-                  child: Text(
-                    post['content'] as String? ?? '',
-                    style: TextStyle(color: subColor, fontSize: 11),
-                    maxLines: 4,
-                    overflow: TextOverflow.ellipsis,
+          ).then((_) => _loadPosts()),
+          child: Container(
+            color: bgColor,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor:
+                      const Color(0xFF00E676).withValues(alpha: 0.2),
+                  child: const Icon(Icons.person,
+                      color: Color(0xFF00E676), size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            nickname,
+                            style: TextStyle(
+                              color: textColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            _timeAgo(post['created_at'] as String?),
+                            style: TextStyle(color: subColor, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                      if (post['content'] != null &&
+                          (post['content'] as String).isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          post['content'] as String,
+                          style: TextStyle(
+                              color: textColor, fontSize: 14, height: 1.4),
+                        ),
+                      ],
+                      if (imageUrl != null) ...[
+                        const SizedBox(height: 10),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            errorBuilder: (_, _, _) => Container(
+                              height: 160,
+                              decoration: BoxDecoration(
+                                color: isDarkMode
+                                    ? const Color(0xFF2C2C2C)
+                                    : Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(Icons.image_outlined,
+                                  color: subColor, size: 40),
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => PostDetailScreen(
+                                    post: post,
+                                    isLiked: isLiked,
+                                    likeCount: likeCount),
+                              ),
+                            ).then((_) => _loadPosts()),
+                            child: Row(
+                              children: [
+                                Icon(Icons.chat_bubble_outline,
+                                    color: subColor, size: 18),
+                                if (commentCount > 0) ...[
+                                  const SizedBox(width: 4),
+                                  Text('$commentCount',
+                                      style: TextStyle(
+                                          color: subColor, fontSize: 13)),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          GestureDetector(
+                            onTap: () => _toggleLike(postId),
+                            child: Row(
+                              children: [
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 150),
+                                  child: Icon(
+                                    isLiked
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    key: ValueKey(isLiked),
+                                    color: isLiked
+                                        ? Colors.redAccent
+                                        : subColor,
+                                    size: 18,
+                                  ),
+                                ),
+                                if (likeCount > 0) ...[
+                                  const SizedBox(width: 4),
+                                  Text('$likeCount',
+                                      style: TextStyle(
+                                          color: isLiked
+                                              ? Colors.redAccent
+                                              : subColor,
+                                          fontSize: 13)),
+                                ],
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 20),
+                          Icon(Icons.share_outlined,
+                              color: subColor, size: 18),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
+              ],
+            ),
+          ),
         );
       },
     );
