@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'chat_list_screen.dart';
 import 'gather_edit_screen.dart';
-import 'gather_screen.dart';
 import 'story_add_screen.dart';
 import 'story_show_screen.dart';
 import 'dart:typed_data';
@@ -508,8 +507,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           fontSize: 19,
                           fontWeight: FontWeight.bold)),
                   GestureDetector(
-                    onTap: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const GatherScreen())),
+                    onTap: widget.onNavigateToGather,
                     child: const Text('전체보기',
                         style: TextStyle(
                             color: Color(0xFF00E676), fontSize: 13)),

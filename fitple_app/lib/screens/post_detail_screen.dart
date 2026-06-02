@@ -33,6 +33,36 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
     _isLiked = widget.isLiked;
     _likeCount = widget.likeCount;
     _loadComments();
+    _fetchLikeStatus();
+  }
+
+  Future<void> _fetchLikeStatus() async {
+    final me = Supabase.instance.client.auth.currentUser;
+    final postId = widget.post['id'] as String;
+    try {
+      final allLikes = await Supabase.instance.client
+          .from('post_likes')
+          .select('id')
+          .eq('post_id', postId);
+      final likeCount = (allLikes as List).length;
+
+      bool isLiked = _isLiked;
+      if (me != null) {
+        final myLike = await Supabase.instance.client
+            .from('post_likes')
+            .select('id')
+            .eq('post_id', postId)
+            .eq('user_id', me.id)
+            .maybeSingle();
+        isLiked = myLike != null;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _likeCount = likeCount;
+        _isLiked = isLiked;
+      });
+    } catch (_) {}
   }
 
   @override
@@ -80,11 +110,17 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
             .eq('user_id', me.id)
             .eq('post_id', widget.post['id'] as String);
       }
-    } catch (_) {
+    } catch (e) {
+      // 실패 시 낙관적 업데이트 롤백
       setState(() {
         _isLiked = !_isLiked;
         _likeCount += _isLiked ? 1 : -1;
       });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('좋아요 실패: $e')),
+        );
+      }
     }
   }
 
@@ -119,7 +155,12 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
           );
         }
       });
-    } catch (_) {
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('댓글 등록 실패: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSendingComment = false);
     }

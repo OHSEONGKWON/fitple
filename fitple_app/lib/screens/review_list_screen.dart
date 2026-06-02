@@ -203,7 +203,7 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
                   child: ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
                     itemCount: _targets.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    separatorBuilder: (context, i) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
                       final target = _targets[index];
                       final reviewed = _alreadyReviewed.contains(target.userId);

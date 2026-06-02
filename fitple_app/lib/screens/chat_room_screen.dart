@@ -37,6 +37,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Map<String, dynamic>? _replyToMessage;
   bool _isSendingImage = false;
   bool _isSendingSchedule = false;
+  Timer? _readStatusTimer;
 
   @override
   void initState() {
@@ -59,6 +60,64 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     _startMessagesPollingFallback();
     _fetchMessagesOnce();
     _subscribeToRoom();
+    // 즉시 읽음 처리 + 상대방 읽음 상태 주기적 갱신
+    _initAndMarkRead();
+    _readStatusTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _refreshOtherReadAt(),
+    );
+  }
+
+  /// 채팅방 진입 시 즉시 내 읽음 시각 업데이트 & 상대방 읽음 시각 로드
+  Future<void> _initAndMarkRead() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+    try {
+      final room = await Supabase.instance.client
+          .from('chat_rooms')
+          .select('host_id, host_last_read_at, guest_last_read_at')
+          .eq('id', widget.roomId)
+          .single();
+      final isHost = room['host_id'] == user.id;
+      final role = isHost ? 'host' : 'guest';
+      final otherReadAtStr = isHost
+          ? room['guest_last_read_at'] as String?
+          : room['host_last_read_at'] as String?;
+      if (mounted) {
+        setState(() {
+          _myRole = role;
+          _otherLastReadAt = otherReadAtStr != null
+              ? DateTime.tryParse(otherReadAtStr)
+              : null;
+        });
+      }
+      await _updateLastReadAt(role);
+    } catch (_) {}
+  }
+
+  /// 상대방이 읽었는지 주기적으로 확인 (Realtime 미활성 환경 대응)
+  Future<void> _refreshOtherReadAt() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null || !mounted) return;
+    try {
+      final room = await Supabase.instance.client
+          .from('chat_rooms')
+          .select('host_id, host_last_read_at, guest_last_read_at')
+          .eq('id', widget.roomId)
+          .single();
+      final isHost = room['host_id'] == user.id;
+      final otherReadAtStr = isHost
+          ? room['guest_last_read_at'] as String?
+          : room['host_last_read_at'] as String?;
+      final otherReadAt =
+          otherReadAtStr != null ? DateTime.tryParse(otherReadAtStr) : null;
+      // millisecond 기준 비교로 DateTime 동등성 문제 방지
+      final prevMs = _otherLastReadAt?.millisecondsSinceEpoch;
+      final newMs = otherReadAt?.millisecondsSinceEpoch;
+      if (mounted && prevMs != newMs) {
+        setState(() => _otherLastReadAt = otherReadAt);
+      }
+    } catch (_) {}
   }
 
   void _startMessagesPollingFallback() {
@@ -192,10 +251,15 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     }
     _lastReadAtUpdate = now;
     final col = role == 'host' ? 'host_last_read_at' : 'guest_last_read_at';
-    await Supabase.instance.client
-        .from('chat_rooms')
-        .update({col: now.toUtc().toIso8601String()})
-        .eq('id', widget.roomId);
+    try {
+      await Supabase.instance.client
+          .from('chat_rooms')
+          .update({col: now.toUtc().toIso8601String()})
+          .eq('id', widget.roomId);
+    } catch (e) {
+      // 실패 시 디버그용 (RLS 정책 미설정 가능성)
+      debugPrint('_updateLastReadAt 실패: $e');
+    }
   }
 
   Future<void> _leaveChatRoom() async {
@@ -233,13 +297,20 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
           .from('chat_rooms')
           .delete()
           .eq('id', widget.roomId)
-          .select('id');
-
-      if (deleted.isEmpty) {
-        throw Exception('채팅방을 삭제할 권한이 없습니다. (RLS 정책 확인 필요)');
-      }
+          .select();
 
       if (!mounted) return;
+
+      if ((deleted as List).isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('나가기 실패: 권한이 없거나 이미 삭제된 채팅방입니다.\nSupabase chat_rooms DELETE 정책을 확인하세요.'),
+            duration: Duration(seconds: 4),
+          ),
+        );
+        return;
+      }
+
       Navigator.pop(context, true);
     } on PostgrestException catch (e) {
       if (!mounted) return;
@@ -269,6 +340,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     _messagesSubscription?.cancel();
     _roomSubscription?.cancel();
     _messagesPollingTimer?.cancel();
+    _readStatusTimer?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -1188,7 +1260,7 @@ class _MessageBubble extends StatelessWidget {
                                     ),
                                   );
                                 },
-                                errorBuilder: (_, _, _) => Container(
+                                errorBuilder: (context, e, stack) => Container(
                                   height: 100,
                                   color: bubbleColor,
                                   child: Icon(Icons.broken_image,
@@ -1267,12 +1339,19 @@ class _ScheduleProposalBubbleState extends State<_ScheduleProposalBubble> {
 
   Future<void> _respond(String status) async {
     final scheduleId = widget.message['schedule_id'] as String?;
+    final messageId = widget.message['id'] as String?;
     if (scheduleId == null || _isUpdating) return;
     setState(() => _isUpdating = true);
     try {
-      await Supabase.instance.client
-          .from('schedules')
-          .update({'status': status}).eq('id', scheduleId);
+      await Future.wait([
+        Supabase.instance.client
+            .from('schedules')
+            .update({'status': status}).eq('id', scheduleId),
+        if (messageId != null)
+          Supabase.instance.client
+              .from('messages')
+              .update({'schedule_status': status}).eq('id', messageId),
+      ]);
       if (mounted) setState(() { _status = status; _isUpdating = false; });
     } catch (e) {
       if (mounted) {

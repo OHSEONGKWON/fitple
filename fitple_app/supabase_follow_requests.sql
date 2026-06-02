@@ -32,3 +32,19 @@ CREATE POLICY "follow_requests_delete" ON follow_requests
   FOR DELETE USING (
     auth.uid() = requester_id OR auth.uid() = target_id
   );
+
+-- 팔로우 요청 수락 시 대상 유저(target)가 follows 행을 생성할 수 있도록 허용
+-- (요청 발신자(requester)가 follower, 대상(target)이 following)
+DROP POLICY IF EXISTS "follows_insert_by_request_target" ON follows;
+
+CREATE POLICY "follows_insert_by_request_target" ON follows
+  FOR INSERT WITH CHECK (
+    auth.uid() = following_id
+    AND follower_id != following_id
+    AND EXISTS (
+      SELECT 1
+      FROM follow_requests fr
+      WHERE fr.requester_id = follower_id
+        AND fr.target_id = following_id
+    )
+  );

@@ -13,11 +13,57 @@ class _FollowRequestsScreenState extends State<FollowRequestsScreen> {
   List<Map<String, dynamic>> _requests = [];
   bool _isLoading = true;
   final Set<String> _processing = {};
+  RealtimeChannel? _followRequestChannel;
 
   @override
   void initState() {
     super.initState();
+    _subscribeToRealtime();
     _loadRequests();
+  }
+
+  @override
+  void dispose() {
+    _followRequestChannel?.unsubscribe();
+    super.dispose();
+  }
+
+  void _subscribeToRealtime() {
+    final currentUser = Supabase.instance.client.auth.currentUser;
+    if (currentUser == null) return;
+
+    _followRequestChannel = Supabase.instance.client
+        .channel('follow_requests_screen_${currentUser.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'follow_requests',
+          callback: (payload) {
+            final newRecord = payload.newRecord;
+            final oldRecord = payload.oldRecord;
+
+            if (newRecord.isNotEmpty &&
+                newRecord['target_id'] == currentUser.id &&
+                mounted) {
+              final inserted = Map<String, dynamic>.from(newRecord);
+              setState(() {
+                final insertedId = inserted['id'];
+                _requests.removeWhere((r) => r['id'] == insertedId);
+                _requests.insert(0, inserted);
+              });
+            }
+
+            if (oldRecord.isNotEmpty && mounted) {
+              final deletedId = oldRecord['id'];
+              if (deletedId != null) {
+                setState(() {
+                  _requests.removeWhere((r) => r['id'] == deletedId);
+                });
+              }
+            }
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _loadRequests() async {

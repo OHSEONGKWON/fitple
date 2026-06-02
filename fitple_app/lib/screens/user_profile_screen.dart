@@ -612,7 +612,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 ? Image.network(
                                     imageUrl,
                                     fit: BoxFit.cover,
-                                    errorBuilder: (_, __, e) => Container(
+                                    errorBuilder: (context, e, stack) => Container(
                                       color: isDarkMode
                                           ? const Color(0xFF2C2C2C)
                                           : Colors.grey.shade200,

@@ -132,12 +132,17 @@ class _FeedScreenState extends State<FeedScreen> {
           'post_id': postId,
         });
       }
-    } catch (_) {
+    } catch (e) {
       setState(() {
         _likedPosts[postId] = wasLiked;
         _likeCounts[postId] =
             (_likeCounts[postId] ?? 0) + (wasLiked ? 1 : -1);
       });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('좋아요 실패: $e')),
+        );
+      }
     }
   }
 

@@ -15,6 +15,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   List<Map<String, dynamic>> _directRooms = [];
   List<Map<String, dynamic>> _groupRooms = [];
   bool _isLoading = true;
+  bool _isRefreshing = false;
   RealtimeChannel? _messageChannel;
   Set<String> _roomIds = {};
   int _selectedTabIndex = 0; // 0: 개인채팅, 1: 단체채팅
@@ -57,96 +58,93 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       : (msg['content'] as String? ?? ''),
             );
 
-            _loadRooms();
+            _loadRooms(silent: true);
           },
         )
         .subscribe();
   }
 
-  Future<Map<String, dynamic>> _enrichRoom(
-      Map<String, dynamic> room, String userId) async {
-    final isHost = room['host_id'] == userId;
-    final myLastReadAt = (isHost
-        ? room['host_last_read_at']
-        : room['guest_last_read_at']) as String?;
-
-    final lastMsgsFuture = Supabase.instance.client
-        .from('messages')
-        .select()
-        .eq('room_id', room['id'] as String)
-        .order('created_at', ascending: false)
-        .limit(1);
-
-    final unreadFuture = myLastReadAt != null
-        ? Supabase.instance.client
-            .from('messages')
-            .select('id')
-            .eq('room_id', room['id'] as String)
-            .neq('sender_id', userId)
-            .gt('created_at', myLastReadAt)
-        : Supabase.instance.client
-            .from('messages')
-            .select('id')
-            .eq('room_id', room['id'] as String)
-            .neq('sender_id', userId);
-
-    final results = await Future.wait([lastMsgsFuture, unreadFuture]);
-    final lastMsgs = results[0] as List;
-    final unreads = results[1] as List;
-
-    return {
-      ...room,
-      '_lastMessage': lastMsgs.isNotEmpty ? lastMsgs.first : null,
-      '_unreadCount': unreads.length,
-    };
-  }
-
-  Future<void> _loadRooms() async {
-    setState(() => _isLoading = true);
+  Future<void> _loadRooms({bool silent = false}) async {
+    if (_isRefreshing) return;
+    _isRefreshing = true;
+    if (!silent && mounted) setState(() => _isLoading = true);
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
-      setState(() => _isLoading = false);
+      _isRefreshing = false;
+      if (mounted) setState(() => _isLoading = false);
       return;
     }
     try {
-      final hostRooms = await Supabase.instance.client
-          .from('chat_rooms')
-          .select()
-          .eq('host_id', user.id);
+      // 1. 방 목록 병렬 조회 후 ID 기준 중복 제거
+      final rawResults = await Future.wait([
+        Supabase.instance.client.from('chat_rooms').select().eq('host_id', user.id),
+        Supabase.instance.client.from('chat_rooms').select().eq('guest_id', user.id),
+      ]);
+      final uniqueRooms = <String, Map<String, dynamic>>{};
+      for (final list in rawResults) {
+        for (final room in list as List) {
+          final r = Map<String, dynamic>.from(room as Map);
+          uniqueRooms[r['id'] as String] = r;
+        }
+      }
+      final allRooms = uniqueRooms.values.toList();
 
-      final guestRooms = await Supabase.instance.client
-          .from('chat_rooms')
-          .select()
-          .eq('guest_id', user.id);
+      if (allRooms.isNotEmpty) {
+        final roomIds = allRooms.map((r) => r['id'] as String).toList();
 
-      final all = [
-        ...List<Map<String, dynamic>>.from(hostRooms),
-        ...List<Map<String, dynamic>>.from(guestRooms),
-      ];
+        // 2. 단일 배치 쿼리로 모든 메시지 조회 (N+1 제거)
+        final messages = await Supabase.instance.client
+            .from('messages')
+            .select('id, room_id, sender_id, content, message_type, created_at')
+            .inFilter('room_id', roomIds)
+            .order('created_at', ascending: false);
 
-      final directEnriched = await Future.wait(
-        all.map((room) => _enrichRoom(room, user.id)),
-      );
+        final msgList = List<Map<String, dynamic>>.from(messages as List);
 
-      directEnriched.sort((a, b) {
-        final aTime =
-            (a['_lastMessage'] as Map?)?['created_at'] as String? ??
-                a['created_at'] as String? ??
-                '';
-        final bTime =
-            (b['_lastMessage'] as Map?)?['created_at'] as String? ??
-                b['created_at'] as String? ??
-                '';
+        // 방별 마지막 메시지 & 안읽은 수 계산
+        final lastMsgByRoom = <String, Map<String, dynamic>>{};
+        final msgsByRoom = <String, List<Map<String, dynamic>>>{};
+        for (final msg in msgList) {
+          final roomId = msg['room_id'] as String;
+          lastMsgByRoom.putIfAbsent(roomId, () => msg);
+          msgsByRoom.putIfAbsent(roomId, () => []).add(msg);
+        }
+
+        for (final room in allRooms) {
+          final roomId = room['id'] as String;
+          final isHost = room['host_id'] == user.id;
+          final myLastReadAt = (isHost
+              ? room['host_last_read_at']
+              : room['guest_last_read_at']) as String?;
+
+          room['_lastMessage'] = lastMsgByRoom[roomId];
+
+          int unread = 0;
+          for (final msg in msgsByRoom[roomId] ?? []) {
+            if (msg['sender_id'] == user.id) continue;
+            if (myLastReadAt == null ||
+                (msg['created_at'] as String).compareTo(myLastReadAt) > 0) {
+              unread++;
+            }
+          }
+          room['_unreadCount'] = unread;
+        }
+      }
+
+      allRooms.sort((a, b) {
+        final aTime = (a['_lastMessage'] as Map?)?['created_at'] as String? ??
+            a['created_at'] as String? ?? '';
+        final bTime = (b['_lastMessage'] as Map?)?['created_at'] as String? ??
+            b['created_at'] as String? ?? '';
         return bTime.compareTo(aTime);
       });
 
       final groupRooms = await _loadGroupRooms(user.id);
-
-      _roomIds = directEnriched.map((r) => r['id'] as String).toSet();
+      _roomIds = allRooms.map((r) => r['id'] as String).toSet();
 
       if (mounted) {
         setState(() {
-          _directRooms = directEnriched;
+          _directRooms = allRooms;
           _groupRooms = groupRooms;
           _isLoading = false;
         });
@@ -154,66 +152,78 @@ class _ChatListScreenState extends State<ChatListScreen> {
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('불러오기 실패: $e')),
-        );
+        if (!silent) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('불러오기 실패: $e')),
+          );
+        }
       }
+    } finally {
+      _isRefreshing = false;
     }
   }
 
   Future<List<Map<String, dynamic>>> _loadGroupRooms(String userId) async {
-    final hostRooms = await Supabase.instance.client
-        .from('group_chat_rooms')
-        .select()
-        .eq('host_id', userId);
+    try {
+      final hostRooms = await Supabase.instance.client
+          .from('group_chat_rooms')
+          .select()
+          .eq('host_id', userId);
 
-    final myMessages = await Supabase.instance.client
-        .from('group_messages')
-        .select('room_id')
-        .eq('user_id', userId);
+      final myMessages = await Supabase.instance.client
+          .from('group_messages')
+          .select('room_id')
+          .eq('user_id', userId);
 
-    final roomIds = <String>{
-      ...List<Map<String, dynamic>>.from(hostRooms)
-          .map((r) => r['id']?.toString() ?? '')
-          .where((id) => id.isNotEmpty),
-      ...List<Map<String, dynamic>>.from(myMessages)
-          .map((m) => m['room_id']?.toString() ?? '')
-          .where((id) => id.isNotEmpty),
-    };
+      final roomIds = <String>{
+        ...List<Map<String, dynamic>>.from(hostRooms)
+            .map((r) => r['id']?.toString() ?? '')
+            .where((id) => id.isNotEmpty),
+        ...List<Map<String, dynamic>>.from(myMessages)
+            .map((m) => m['room_id']?.toString() ?? '')
+            .where((id) => id.isNotEmpty),
+      };
 
-    if (roomIds.isEmpty) return [];
+      if (roomIds.isEmpty) return [];
 
-    final rooms = await Supabase.instance.client
-        .from('group_chat_rooms')
-        .select()
-        .inFilter('id', roomIds.toList());
+      final rooms = await Supabase.instance.client
+          .from('group_chat_rooms')
+          .select()
+          .inFilter('id', roomIds.toList());
 
-    final enriched = await Future.wait(
-      List<Map<String, dynamic>>.from(rooms).map((room) async {
-        final lastMsgs = await Supabase.instance.client
-            .from('group_messages')
-            .select()
-            .eq('room_id', room['id'] as String)
-            .order('created_at', ascending: false)
-            .limit(1);
-        return {
-          ...room,
-          '_lastMessage': lastMsgs.isNotEmpty ? lastMsgs.first : null,
-        };
-      }),
-    );
+      final enriched = await Future.wait(
+        List<Map<String, dynamic>>.from(rooms).map((room) async {
+          try {
+            final lastMsgs = await Supabase.instance.client
+                .from('group_messages')
+                .select()
+                .eq('room_id', room['id'] as String)
+                .order('created_at', ascending: false)
+                .limit(1);
+            return {
+              ...room,
+              '_lastMessage': lastMsgs.isNotEmpty ? lastMsgs.first : null,
+            };
+          } catch (_) {
+            return {...room, '_lastMessage': null};
+          }
+        }),
+      );
 
-    enriched.sort((a, b) {
-      final aTime = (a['_lastMessage'] as Map?)?['created_at'] as String? ??
-          a['created_at'] as String? ??
-          '';
-      final bTime = (b['_lastMessage'] as Map?)?['created_at'] as String? ??
-          b['created_at'] as String? ??
-          '';
-      return bTime.compareTo(aTime);
-    });
+      enriched.sort((a, b) {
+        final aTime = (a['_lastMessage'] as Map?)?['created_at'] as String? ??
+            a['created_at'] as String? ??
+            '';
+        final bTime = (b['_lastMessage'] as Map?)?['created_at'] as String? ??
+            b['created_at'] as String? ??
+            '';
+        return bTime.compareTo(aTime);
+      });
 
-    return enriched;
+      return enriched;
+    } catch (_) {
+      return [];
+    }
   }
 
   String _getOtherNickname(Map<String, dynamic> room) {
@@ -265,10 +275,19 @@ class _ChatListScreenState extends State<ChatListScreen> {
     if (confirm != true) return;
 
     try {
-      await Supabase.instance.client
+      final deleted = await Supabase.instance.client
           .from('chat_rooms')
           .delete()
-          .eq('id', roomId);
+          .eq('id', roomId)
+          .select();
+      if (!mounted) return;
+      if ((deleted as List).isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('나가기 실패: Supabase chat_rooms DELETE 정책을 확인하세요.')),
+        );
+        return;
+      }
+      _isRefreshing = false;
       _loadRooms();
     } catch (e) {
       if (!mounted) return;
@@ -317,6 +336,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
             .eq('room_id', room['id'])
             .eq('user_id', userId);
       }
+      _isRefreshing = false;
       _loadRooms();
     } catch (e) {
       if (!mounted) return;
@@ -430,12 +450,19 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
                             return GestureDetector(
                               onTap: () async {
+                                // 뱃지 낙관적 즉시 초기화
+                                final roomId = room['id'] as String;
                                 if (_selectedTabIndex == 0) {
+                                  final idx = _directRooms
+                                      .indexWhere((r) => r['id'] == roomId);
+                                  if (idx >= 0 && mounted) {
+                                    setState(() => _directRooms[idx]['_unreadCount'] = 0);
+                                  }
                                   await Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => ChatRoomScreen(
-                                        roomId: room['id'],
+                                        roomId: roomId,
                                         otherUserNickname: _getOtherNickname(room),
                                         gatheringTitle: room['gathering_title'] ?? '모집글',
                                         otherUserId: _getOtherUserId(room),
@@ -455,6 +482,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                     ),
                                   );
                                 }
+                                _isRefreshing = false;
                                 _loadRooms();
                               },
                               child: Container(

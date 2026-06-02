@@ -152,9 +152,9 @@ class _PostCreateScreenState extends State<PostCreateScreen> {
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  // ── 이미지 영역 (인스타처럼 상단에 크게) ──
+                  // ── 이미지 영역 ──
                   GestureDetector(
-                    onTap: kIsWeb ? null : _pickImage,
+                    onTap: _pickImage,
                     child: _imageBytes != null
                         ? Stack(
                             children: [
@@ -184,12 +184,11 @@ class _PostCreateScreenState extends State<PostCreateScreen> {
                                   ),
                                 ),
                               ),
-                              // 사진 변경 버튼
                               Positioned(
                                 bottom: 10,
                                 right: 10,
                                 child: GestureDetector(
-                                  onTap: kIsWeb ? null : _pickImage,
+                                  onTap: _pickImage,
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(
                                         horizontal: 10, vertical: 6),
@@ -216,44 +215,44 @@ class _PostCreateScreenState extends State<PostCreateScreen> {
                               ),
                             ],
                           )
-                        : Container(
-                            width: double.infinity,
-                            height: MediaQuery.of(context).size.width,
-                            color: isDarkMode
-                                ? const Color(0xFF1E1E1E)
-                                : Colors.grey.shade100,
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  width: 72,
-                                  height: 72,
-                                  decoration: BoxDecoration(
-                                    color: isDarkMode
-                                        ? const Color(0xFF2C2C2C)
-                                        : Colors.grey.shade200,
-                                    shape: BoxShape.circle,
+                        : GestureDetector(
+                            onTap: _pickImage,
+                            child: Container(
+                              width: double.infinity,
+                              height: kIsWeb ? 320 : MediaQuery.of(context).size.width,
+                              color: isDarkMode
+                                  ? const Color(0xFF1E1E1E)
+                                  : Colors.grey.shade100,
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    width: 72,
+                                    height: 72,
+                                    decoration: BoxDecoration(
+                                      color: isDarkMode
+                                          ? const Color(0xFF2C2C2C)
+                                          : Colors.grey.shade200,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(Icons.add_photo_alternate_outlined,
+                                        size: 36, color: subColor),
                                   ),
-                                  child: Icon(Icons.add_photo_alternate_outlined,
-                                      size: 36, color: subColor),
-                                ),
-                                const SizedBox(height: 14),
-                                Text(
-                                  kIsWeb
-                                      ? '모바일 앱에서 사진을 추가할 수 있어요'
-                                      : '사진을 선택하세요',
-                                  style: TextStyle(
-                                      color: subColor,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500),
-                                ),
-                                if (!kIsWeb) ...[
+                                  const SizedBox(height: 14),
+                                  Text(
+                                    '사진을 선택하세요',
+                                    style: TextStyle(
+                                        color: subColor,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500),
+                                  ),
                                   const SizedBox(height: 6),
-                                  Text('탭하여 갤러리 열기',
-                                      style: TextStyle(
-                                          color: subColor, fontSize: 12)),
+                                  Text(
+                                    kIsWeb ? '클릭하여 파일 선택' : '탭하여 갤러리 열기',
+                                    style: TextStyle(
+                                        color: subColor, fontSize: 12)),
                                 ],
-                              ],
+                              ),
                             ),
                           ),
                   ),
@@ -317,32 +316,32 @@ class _PostCreateScreenState extends State<PostCreateScreen> {
           ),
 
           // ── 하단 도구 바 ──
-          if (!kIsWeb)
-            Container(
-              color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
-              child: SafeArea(
-                top: false,
-                child: Column(
-                  children: [
-                    Divider(height: 1, color: divColor),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 12),
-                      child: Row(
-                        children: [
-                          GestureDetector(
-                            onTap: _pickImage,
-                            child: Row(children: [
-                              Icon(Icons.photo_library_outlined,
-                                  color: const Color(0xFF00E676), size: 22),
-                              const SizedBox(width: 6),
-                              Text('갤러리',
-                                  style: TextStyle(
-                                      color: const Color(0xFF00E676),
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 14)),
-                            ]),
-                          ),
+          Container(
+            color: isDarkMode ? const Color(0xFF1E1E1E) : Colors.white,
+            child: SafeArea(
+              top: false,
+              child: Column(
+                children: [
+                  Divider(height: 1, color: divColor),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 12),
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap: _pickImage,
+                          child: Row(children: [
+                            Icon(Icons.photo_library_outlined,
+                                color: const Color(0xFF00E676), size: 22),
+                            const SizedBox(width: 6),
+                            Text(kIsWeb ? '파일 선택' : '갤러리',
+                                style: const TextStyle(
+                                    color: Color(0xFF00E676),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14)),
+                          ]),
+                        ),
+                        if (!kIsWeb) ...[
                           const SizedBox(width: 20),
                           GestureDetector(
                             onTap: () async {
@@ -368,12 +367,13 @@ class _PostCreateScreenState extends State<PostCreateScreen> {
                             ]),
                           ),
                         ],
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
+          ),
         ],
       ),
     );
