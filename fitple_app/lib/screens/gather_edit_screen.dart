@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'map_picker_screen.dart';
 
 class GatherEditScreen extends StatefulWidget {
   final Map<String, dynamic>? initialData;
@@ -61,11 +63,45 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
 
   Future<void> _openMapPicker() async {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('현재 지도 선택은 잠시 비활성화되어 있어요. 장소를 직접 입력해주세요.'),
+    if (kIsWeb) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('지도 선택은 현재 모바일 앱에서만 지원됩니다.'),
+        ),
+      );
+      return;
+    }
+
+    NLatLng? initialLatLng;
+    final latRaw = widget.initialData?['location_lat'];
+    final lngRaw = widget.initialData?['location_lng'];
+    final lat = double.tryParse(latRaw?.toString() ?? '');
+    final lng = double.tryParse(lngRaw?.toString() ?? '');
+    if (lat != null && lng != null) {
+      initialLatLng = NLatLng(lat, lng);
+    }
+
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MapPickerScreen(initialLatLng: initialLatLng),
       ),
     );
+
+    if (!mounted || result == null) return;
+    final pickedAddress = (result['address'] ?? '').toString().trim();
+    final pickedLatLng = result['latLng'];
+
+    if (pickedAddress.isNotEmpty) {
+      setState(() => _locationController.text = pickedAddress);
+      return;
+    }
+    if (pickedLatLng is NLatLng) {
+      setState(() {
+        _locationController.text =
+            '${pickedLatLng.latitude.toStringAsFixed(5)}, ${pickedLatLng.longitude.toStringAsFixed(5)}';
+      });
+    }
   }
 
   int _parseControllerInt(TextEditingController controller, int fallback) {
@@ -384,9 +420,24 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
           const SizedBox(height: 20),
           Text('장소', style: labelStyle),
           const SizedBox(height: 8),
-          TextField(
-            controller: _locationController,
-            decoration: const InputDecoration(hintText: '장소를 직접 입력해주세요'),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _locationController,
+                  decoration: const InputDecoration(hintText: '장소를 직접 입력해주세요'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _openMapPicker,
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: const Text('지도 선택'),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 28),
           ElevatedButton(
@@ -420,6 +471,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
     );
 
     return Scaffold( //여기부터 디자인
+      backgroundColor: isDarkMode ? const Color(0xFF111317) : Colors.white,
       appBar: AppBar(
         title: Text(
           widget.initialData != null ? '모집글 수정하기' : '새 크루 모집하기',
@@ -432,6 +484,12 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
+      body: SafeArea(
+        child: kIsWeb
+            ? _buildWebForm(isDarkMode, labelStyle)
+            : _buildWebForm(isDarkMode, labelStyle),
+      ),
+      /*
       body: kIsWeb
           ? _buildWebForm(isDarkMode, labelStyle)
           : SingleChildScrollView(
@@ -708,7 +766,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 14),
                       ),
                       icon: const Icon(Icons.map_outlined, size: 20),
-                      label: const Text('지도 선택(준비중)'),
+                      label: const Text('지도 선택'),
                     ),
                   ),
                 ],
@@ -779,6 +837,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
           ),
         ),
       ),
+      */
     );
   }
 }

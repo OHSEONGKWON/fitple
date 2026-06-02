@@ -19,6 +19,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
   RealtimeChannel? _messageChannel;
   Set<String> _roomIds = {};
   int _selectedTabIndex = 0; // 0: 개인채팅, 1: 단체채팅
+  // 방문한 채팅방 → 뱃지 강제 0 (RLS 정책 유무와 무관하게 동작)
+  final Set<String> _visitedRooms = {};
 
   @override
   void initState() {
@@ -127,7 +129,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
               unread++;
             }
           }
-          room['_unreadCount'] = unread;
+          // 이미 방문한 방은 뱃지 강제 0 (RLS 정책 미적용 환경 대응)
+          room['_unreadCount'] = _visitedRooms.contains(roomId) ? 0 : unread;
         }
       }
 
@@ -287,8 +290,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
         );
         return;
       }
+      await Future.delayed(const Duration(milliseconds: 500));
       _isRefreshing = false;
-      _loadRooms();
+      if (mounted) _loadRooms();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -450,9 +454,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
                             return GestureDetector(
                               onTap: () async {
-                                // 뱃지 낙관적 즉시 초기화
+                                // 뱃지 낙관적 즉시 초기화 + 방문 기록
                                 final roomId = room['id'] as String;
                                 if (_selectedTabIndex == 0) {
+                                  _visitedRooms.add(roomId);
                                   final idx = _directRooms
                                       .indexWhere((r) => r['id'] == roomId);
                                   if (idx >= 0 && mounted) {
@@ -482,8 +487,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
                                     ),
                                   );
                                 }
+                                // _updateLastReadAt DB 반영 대기 후 갱신
+                                await Future.delayed(const Duration(milliseconds: 1000));
                                 _isRefreshing = false;
-                                _loadRooms();
+                                if (mounted) _loadRooms();
                               },
                               child: Container(
                                 padding: const EdgeInsets.all(14),

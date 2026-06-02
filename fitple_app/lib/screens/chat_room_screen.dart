@@ -1322,19 +1322,20 @@ class _ScheduleProposalBubble extends StatefulWidget {
 class _ScheduleProposalBubbleState extends State<_ScheduleProposalBubble> {
   late String _status;
   bool _isUpdating = false;
+  bool _hasResponded = false; // 응답 완료 후 폴링이 상태를 되돌리지 못하게 잠금
 
   @override
   void initState() {
     super.initState();
-    _status =
-        widget.message['schedule_status'] as String? ?? 'pending';
+    _status = widget.message['schedule_status'] as String? ?? 'pending';
   }
 
   @override
   void didUpdateWidget(_ScheduleProposalBubble oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final newStatus =
-        widget.message['schedule_status'] as String? ?? 'pending';
+    // 이미 응답했으면 폴링으로 인한 상태 덮어쓰기 방지
+    if (_hasResponded) return;
+    final newStatus = widget.message['schedule_status'] as String? ?? 'pending';
     if (newStatus != _status && !_isUpdating) {
       setState(() => _status = newStatus);
     }
@@ -1354,7 +1355,13 @@ class _ScheduleProposalBubbleState extends State<_ScheduleProposalBubble> {
             .from('messages')
             .update({'schedule_status': status}).eq('id', messageId);
       }
-      if (mounted) setState(() { _status = status; _isUpdating = false; });
+      if (mounted) {
+        setState(() {
+          _status = status;
+          _isUpdating = false;
+          _hasResponded = true; // 응답 완료 잠금
+        });
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _isUpdating = false);

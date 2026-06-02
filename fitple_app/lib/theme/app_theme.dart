@@ -109,7 +109,8 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          minimumSize: const Size.fromHeight(50),
+          // Avoid infinite min width inside Row/Flex children.
+          minimumSize: const Size(0, 50),
           textStyle: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
@@ -122,7 +123,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          minimumSize: const Size.fromHeight(50),
+          minimumSize: const Size(0, 50),
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
@@ -280,7 +281,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          minimumSize: const Size.fromHeight(50),
+          minimumSize: const Size(0, 50),
           textStyle: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
@@ -293,7 +294,7 @@ class AppTheme {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
-          minimumSize: const Size.fromHeight(50),
+          minimumSize: const Size(0, 50),
           textStyle: const TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
