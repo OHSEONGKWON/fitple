@@ -365,6 +365,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             user.userMetadata?['display_name'] ?? user.email ?? '익명',
         'content': text,
         'message_type': 'text',
+        'created_at': DateTime.now().toIso8601String(),
         if (reply != null) 'reply_to_message_id': reply['id'],
         if (reply != null)
           'reply_to_content': reply['message_type'] == 'image'
@@ -429,6 +430,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         'content': '',
         'message_type': 'image',
         'image_url': imageUrl,
+        'created_at': DateTime.now().toIso8601String(),
         if (reply != null) 'reply_to_message_id': reply['id'],
         if (reply != null)
           'reply_to_content': reply['message_type'] == 'image'
@@ -748,6 +750,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         'message_type': 'schedule_proposal',
         'schedule_id': scheduleId,
         'schedule_status': 'pending',
+        'created_at': DateTime.now().toIso8601String(),
       }).select().single();
 
       _upsertMessage(Map<String, dynamic>.from(inserted));
@@ -1343,15 +1346,14 @@ class _ScheduleProposalBubbleState extends State<_ScheduleProposalBubble> {
     if (scheduleId == null || _isUpdating) return;
     setState(() => _isUpdating = true);
     try {
-      await Future.wait([
-        Supabase.instance.client
-            .from('schedules')
-            .update({'status': status}).eq('id', scheduleId),
-        if (messageId != null)
-          Supabase.instance.client
-              .from('messages')
-              .update({'schedule_status': status}).eq('id', messageId),
-      ]);
+      await Supabase.instance.client
+          .from('schedules')
+          .update({'status': status}).eq('id', scheduleId);
+      if (messageId != null) {
+        await Supabase.instance.client
+            .from('messages')
+            .update({'schedule_status': status}).eq('id', messageId);
+      }
       if (mounted) setState(() { _status = status; _isUpdating = false; });
     } catch (e) {
       if (mounted) {
