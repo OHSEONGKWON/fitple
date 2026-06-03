@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'gather_edit_screen.dart';
 import 'chat_room_screen.dart';
 import 'user_profile_screen.dart';
 import 'group_chat_screen.dart';
 import 'review_list_screen.dart';
+import '../services/geocoding_service.dart';
 
 class GatherScreen extends StatefulWidget {
   const GatherScreen({super.key});
@@ -21,6 +23,7 @@ class _GatherScreenState extends State<GatherScreen> {
   List<Map<String, dynamic>> _gatherings = [];
   bool _isLoading = true;
   final TextEditingController _searchController = TextEditingController();
+  final Map<String, String> _locationCache = {};
 
   static const _categories = ['전체', '러닝', '축구', '족구', '배구', '배드민턴', '헬스'];
 
@@ -62,9 +65,12 @@ class _GatherScreenState extends State<GatherScreen> {
           .from('gatherings')
           .select()
           .order(orderColumn, ascending: ascending);
+      final normalized = await _attachDisplayLocation(
+        List<Map<String, dynamic>>.from(data),
+      );
       if (mounted) {
         setState(() {
-          _gatherings = List<Map<String, dynamic>>.from(data);
+          _gatherings = normalized;
           _isLoading = false;
         });
       }
@@ -181,6 +187,49 @@ class _GatherScreenState extends State<GatherScreen> {
       return '지역 비공개';
     }
     return location;
+  }
+
+  Future<List<Map<String, dynamic>>> _attachDisplayLocation(
+    List<Map<String, dynamic>> gatherings,
+  ) async {
+    return Future.wait(
+      gatherings.map((g) async {
+        final row = Map<String, dynamic>.from(g);
+        row['display_location'] = await _resolveDisplayLocation(row);
+        return row;
+      }),
+    );
+  }
+
+  Future<String> _resolveDisplayLocation(Map<String, dynamic> row) async {
+    final rawLocation = (row['location'] ?? '').toString().trim();
+    if (rawLocation.isEmpty || RegExp(r'^\d{5}$').hasMatch(rawLocation)) {
+      return '지역 비공개';
+    }
+
+    NLatLng? latLng;
+    final lat = double.tryParse((row['location_lat'] ?? '').toString());
+    final lng = double.tryParse((row['location_lng'] ?? '').toString());
+    if (lat != null && lng != null) {
+      latLng = NLatLng(lat, lng);
+    } else {
+      latLng = GeocodingService.tryParseLatLngText(rawLocation);
+    }
+
+    if (latLng == null) {
+      return rawLocation;
+    }
+
+    final key =
+        '${latLng.latitude.toStringAsFixed(6)},${latLng.longitude.toStringAsFixed(6)}';
+    final cached = _locationCache[key];
+    if (cached != null && cached.isNotEmpty) {
+      return cached;
+    }
+
+    final address = await GeocodingService.reverseGeocode(latLng);
+    _locationCache[key] = address;
+    return address;
   }
 
   @override
@@ -408,7 +457,9 @@ class _GatherScreenState extends State<GatherScreen> {
                               userScore: '',
                               userBadge: '',
                               extraInfoIcon: Icons.location_on_outlined,
-                              extraInfoText: _displayLocation(g['location']),
+                                extraInfoText: (g['display_location'] ?? '').toString().trim().isEmpty
+                                  ? _displayLocation(g['location'])
+                                  : (g['display_location'] as String),
                               gatheringId: g['id'],
                               authorId: g['user_id'],
                               hostNickname: g['user_nickname'] ?? '익명',

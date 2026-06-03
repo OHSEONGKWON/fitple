@@ -1,8 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_naver_map/flutter_naver_map.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../services/geocoding_service.dart';
 
 class MapPickerScreen extends StatefulWidget {
   final NLatLng? initialLatLng;
@@ -19,7 +18,9 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
   NLatLng? _selectedLatLng;
   String _selectedAddress = '';
   bool _isLoading = false;
+  bool _isSearching = false;
   NaverMapController? _mapController;
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -30,41 +31,70 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _reverseGeocode(NLatLng latLng) async {
     setState(() => _isLoading = true);
     try {
-      final uri = Uri.parse(
-        'https://naveropenapi.apigw.ntruss.com/map-reversegeocode/v2/gc'
-        '?coords=${latLng.longitude},${latLng.latitude}'
-        '&output=json&orders=roadaddr,addr',
-      );
-      final response = await http.get(
-        uri,
-        headers: {
-          'X-NCP-APIGW-API-KEY-ID': '6nqz044aws',
-          'X-NCP-APIGW-API-KEY': 'TRuNcSMkqt3m9z3nqcOZ5iL4o2KezgXjQQ3ix4fC',
-        },
-      );
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body) as Map<String, dynamic>;
-        final results = data['results'] as List<dynamic>?;
-        if (results != null && results.isNotEmpty) {
-          final region = results[0]['region'] as Map<String, dynamic>;
-          final land = results[0]['land'] as Map<String, dynamic>?;
-          final area1 = region['area1']?['name'] ?? '';
-          final area2 = region['area2']?['name'] ?? '';
-          final area3 = region['area3']?['name'] ?? '';
-          final number1 = land?['number1'] ?? '';
-          final number2 = land?['number2'] ?? '';
-          final numberStr = number2.isNotEmpty ? '$number1-$number2' : number1;
-          setState(() => _selectedAddress = '$area1 $area2 $area3 $numberStr'.trim());
-        }
-      }
+      final address = await GeocodingService.reverseGeocode(latLng);
+      if (!mounted) return;
+      setState(() => _selectedAddress = address);
     } catch (_) {
-      setState(() => _selectedAddress =
-          '${latLng.latitude.toStringAsFixed(5)}, ${latLng.longitude.toStringAsFixed(5)}');
+      if (!mounted) return;
+      setState(() => _selectedAddress = '주소 정보 없음');
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _searchAddressAndMove() async {
+    final query = _searchController.text.trim();
+    if (query.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('검색할 주소를 입력해주세요.')),
+      );
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+    setState(() => _isSearching = true);
+    try {
+      final found = await GeocodingService.searchAddress(query);
+      if (!mounted) return;
+      if (found == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('검색 결과가 없습니다. 다른 키워드로 시도해주세요.')),
+        );
+        return;
+      }
+
+      setState(() {
+        _selectedLatLng = found.latLng;
+        _selectedAddress = found.address;
+      });
+
+      await _updateMarker(found.latLng);
+      if (_mapController != null) {
+        final update = NCameraUpdate.scrollAndZoomTo(
+          target: found.latLng,
+          zoom: 16,
+        );
+        await _mapController!.updateCamera(update);
+      }
+      await _reverseGeocode(found.latLng);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('주소 검색 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSearching = false);
+      }
     }
   }
 
@@ -147,33 +177,96 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
             top: 12,
             left: 16,
             right: 16,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: isDarkMode
-                    ? Colors.black.withValues(alpha: 0.75)
-                    : Colors.white.withValues(alpha: 0.92),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    blurRadius: 8,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isDarkMode
+                        ? Colors.black.withValues(alpha: 0.75)
+                        : Colors.white.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.15),
+                        blurRadius: 8,
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.touch_app, color: Color(0xFF00E676), size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    '지도를 탭하여 위치를 선택하세요',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isDarkMode ? Colors.white : Colors.black87,
-                    ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _searchController,
+                          onSubmitted: (_) => _searchAddressAndMove(),
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: '주소 검색 (예: 강남역)',
+                            filled: true,
+                            fillColor: isDarkMode
+                                ? Colors.white.withValues(alpha: 0.08)
+                                : Colors.grey[100],
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide.none,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      SizedBox(
+                        height: 40,
+                        child: ElevatedButton(
+                          onPressed: _isSearching ? null : _searchAddressAndMove,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00E676),
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: _isSearching
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Icon(Icons.search),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isDarkMode
+                        ? Colors.black.withValues(alpha: 0.7)
+                        : Colors.white.withValues(alpha: 0.9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.touch_app, color: Color(0xFF00E676), size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        '지도를 탭하거나 주소로 위치를 검색하세요',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: isDarkMode ? Colors.white : Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
 
@@ -225,7 +318,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                     else
                       Text(
                         _selectedAddress.isEmpty
-                            ? '${_selectedLatLng!.latitude.toStringAsFixed(5)}, ${_selectedLatLng!.longitude.toStringAsFixed(5)}'
+                            ? '주소를 불러오는 중입니다...'
                             : _selectedAddress,
                         style: TextStyle(
                           fontSize: 14,

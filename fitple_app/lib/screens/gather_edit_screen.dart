@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_naver_map/flutter_naver_map.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'map_picker_screen.dart';
+import '../services/geocoding_service.dart';
 
 class GatherEditScreen extends StatefulWidget {
   final Map<String, dynamic>? initialData;
@@ -13,6 +14,8 @@ class GatherEditScreen extends StatefulWidget {
 }
 
 class _GatherEditScreenState extends State<GatherEditScreen> {
+  static final RegExp _latLngPattern = GeocodingService.latLngPattern;
+
   // 1. 입력 필드 컨트롤러
   late TextEditingController _titleController;
   late TextEditingController _descriptionController;
@@ -27,6 +30,7 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
   int _actualParticipantCount = 1;
   bool _isLoadingParticipantFloor = false;
   bool _isSubmitting = false;
+  NLatLng? _selectedLatLng;
 
   @override
   void initState() {
@@ -44,6 +48,14 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
         start: DateTime.parse(d['gather_start']),
         end: DateTime.parse(d['gather_end']),
       );
+    }
+    _selectedLatLng = _extractLatLng(
+      locationText: _locationController.text,
+      latRaw: d?['location_lat'],
+      lngRaw: d?['location_lng'],
+    );
+    if (_selectedLatLng != null) {
+      _hydrateInitialAddress();
     }
     if (d != null) {
       _loadActualParticipantCount();
@@ -73,13 +85,12 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
     }
 
     NLatLng? initialLatLng;
-    final latRaw = widget.initialData?['location_lat'];
-    final lngRaw = widget.initialData?['location_lng'];
-    final lat = double.tryParse(latRaw?.toString() ?? '');
-    final lng = double.tryParse(lngRaw?.toString() ?? '');
-    if (lat != null && lng != null) {
-      initialLatLng = NLatLng(lat, lng);
-    }
+    initialLatLng = _selectedLatLng ??
+        _extractLatLng(
+          locationText: _locationController.text,
+          latRaw: widget.initialData?['location_lat'],
+          lngRaw: widget.initialData?['location_lng'],
+        );
 
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
@@ -91,6 +102,9 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
     if (!mounted || result == null) return;
     final pickedAddress = (result['address'] ?? '').toString().trim();
     final pickedLatLng = result['latLng'];
+    if (pickedLatLng is NLatLng) {
+      _selectedLatLng = pickedLatLng;
+    }
 
     if (pickedAddress.isNotEmpty) {
       setState(() => _locationController.text = pickedAddress);
@@ -102,6 +116,36 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
             '${pickedLatLng.latitude.toStringAsFixed(5)}, ${pickedLatLng.longitude.toStringAsFixed(5)}';
       });
     }
+  }
+
+  NLatLng? _extractLatLng({
+    required String locationText,
+    required dynamic latRaw,
+    required dynamic lngRaw,
+  }) {
+    final lat = double.tryParse((latRaw ?? '').toString());
+    final lng = double.tryParse((lngRaw ?? '').toString());
+    if (lat != null && lng != null) {
+      return NLatLng(lat, lng);
+    }
+    return GeocodingService.tryParseLatLngText(locationText);
+  }
+
+  Future<void> _hydrateInitialAddress() async {
+    final latLng = _selectedLatLng;
+    if (latLng == null) return;
+
+    final current = _locationController.text.trim();
+    if (current.isNotEmpty && _latLngPattern.firstMatch(current) == null) {
+      return;
+    }
+
+    final address = await GeocodingService.reverseGeocode(latLng);
+    if (!mounted || address == '주소 정보 없음') return;
+
+    setState(() {
+      _locationController.text = address;
+    });
   }
 
   int _parseControllerInt(TextEditingController controller, int fallback) {
@@ -284,6 +328,8 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
               'description': _descriptionController.text.trim(),
               'category': _selectedCategory,
               'location': location,
+              'location_lat': _selectedLatLng?.latitude,
+              'location_lng': _selectedLatLng?.longitude,
               'gather_start': _selectedDateRange!.start.toIso8601String().split('T')[0],
               'gather_end': _selectedDateRange!.end.toIso8601String().split('T')[0],
               'min_members': minMembers,
@@ -299,6 +345,8 @@ class _GatherEditScreenState extends State<GatherEditScreen> {
           'description': _descriptionController.text.trim(),
           'category': _selectedCategory,
           'location': location,
+          'location_lat': _selectedLatLng?.latitude,
+          'location_lng': _selectedLatLng?.longitude,
           'gather_start': _selectedDateRange!.start.toIso8601String().split('T')[0],
           'gather_end': _selectedDateRange!.end.toIso8601String().split('T')[0],
           'min_members': minMembers,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'follow_list_screen.dart';
 import 'post_detail_screen.dart';
+import 'review_history_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final String userId;
@@ -363,43 +364,88 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                                 fontWeight: FontWeight.bold,
                                 color: textColor)),
                         const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: _temperatureColor().withValues(alpha: 0.14),
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
                             borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: _temperatureColor().withValues(alpha: 0.4),
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ReviewHistoryScreen(
+                                  userId: widget.userId,
+                                  nickname: widget.nickname,
+                                ),
+                              ),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: _temperatureColor().withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: _temperatureColor().withValues(alpha: 0.4),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.local_fire_department,
+                                    size: 16,
+                                    color: _temperatureColor(),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${_temperature.toStringAsFixed(1)}°C',
+                                    style: TextStyle(
+                                      color: _temperatureColor(),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '후기 $_temperatureReviewCount개',
+                                    style: TextStyle(
+                                      color: subColor,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.local_fire_department,
-                                size: 16,
-                                color: _temperatureColor(),
+                        ),
+                        const SizedBox(height: 10),
+                        OutlinedButton.icon(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ReviewHistoryScreen(
+                                userId: widget.userId,
+                                nickname: widget.nickname,
                               ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${_temperature.toStringAsFixed(1)}°C',
-                                style: TextStyle(
-                                  color: _temperatureColor(),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '후기 $_temperatureReviewCount개',
-                                style: TextStyle(
-                                  color: subColor,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.rate_review_outlined,
+                            size: 16,
+                            color: Color(0xFF00E676),
+                          ),
+                          label: const Text(
+                            '리뷰 보기',
+                            style: TextStyle(
+                              color: Color(0xFF00E676),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFF00E676)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                         ),
                         if (_isPrivate) ...[

@@ -21,6 +21,8 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
   bool _isLoading = true;
   final List<_ReviewTarget> _targets = [];
   final Set<String> _alreadyReviewed = {};
+  String? _schemaErrorMessage;
+  String? _permissionErrorMessage;
 
   String get _myId => Supabase.instance.client.auth.currentUser?.id ?? '';
 
@@ -42,11 +44,14 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
         _isLoading = true;
         _targets.clear();
         _alreadyReviewed.clear();
+        _schemaErrorMessage = null;
+        _permissionErrorMessage = null;
       });
     }
 
     try {
       final users = <String, String>{};
+      var isMyParticipationConfirmed = false;
 
       final hostRows = await Supabase.instance.client
           .from('gatherings')
@@ -58,6 +63,9 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
         final hostId = (host['user_id'] ?? '').toString();
         final hostName = (host['user_nickname'] ?? '호스트').toString();
         if (hostId.isNotEmpty) users[hostId] = hostName;
+        if (hostId == _myId) {
+          isMyParticipationConfirmed = true;
+        }
       }
 
       final rooms = await Supabase.instance.client
@@ -69,10 +77,16 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
         final hostId = (row['host_id'] ?? '').toString();
         final hostName = (row['host_nickname'] ?? '호스트').toString();
         if (hostId.isNotEmpty) users.putIfAbsent(hostId, () => hostName);
+        if (hostId == _myId) {
+          isMyParticipationConfirmed = true;
+        }
 
         final guestId = (row['guest_id'] ?? '').toString();
         final guestName = (row['guest_nickname'] ?? '참여자').toString();
         if (guestId.isNotEmpty) users.putIfAbsent(guestId, () => guestName);
+        if (guestId == _myId) {
+          isMyParticipationConfirmed = true;
+        }
       }
 
       final groupRoom = await Supabase.instance.client
@@ -94,7 +108,20 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
           final userId = (row['user_id'] ?? '').toString();
           final nickname = (row['user_nickname'] ?? '참여자').toString();
           if (userId.isNotEmpty) users.putIfAbsent(userId, () => nickname);
+          if (userId == _myId) {
+            isMyParticipationConfirmed = true;
+          }
         }
+      }
+
+      if (!isMyParticipationConfirmed) {
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+          _permissionErrorMessage =
+              '내가 참여한 경기에서만 상대방을 평가할 수 있어요.';
+        });
+        return;
       }
 
       users.remove(_myId);
@@ -120,6 +147,22 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
         _targets.addAll(targets);
         _isLoading = false;
       });
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+      final missingReviewTable =
+          e.code == 'PGRST205' && e.message.contains("public.user_reviews");
+      setState(() {
+        _isLoading = false;
+        if (missingReviewTable) {
+          _schemaErrorMessage =
+              '평가 테이블이 아직 생성되지 않았어요.\nSupabase SQL Editor에서 supabase_reviews.sql을 실행해주세요.';
+        }
+      });
+      if (!missingReviewTable) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('평가 대상 불러오기 실패: ${e.message}')),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -186,6 +229,28 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
           ? const Center(
               child: CircularProgressIndicator(color: Color(0xFF00E676)),
             )
+          : _schemaErrorMessage != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      _schemaErrorMessage!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: subColor, fontSize: 14, height: 1.6),
+                    ),
+                  ),
+                )
+          : _permissionErrorMessage != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(
+                      _permissionErrorMessage!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: subColor, fontSize: 14, height: 1.6),
+                    ),
+                  ),
+                )
           : _targets.isEmpty
               ? Center(
                   child: Padding(

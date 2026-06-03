@@ -91,6 +91,44 @@ class _ReviewWriteScreenState extends State<ReviewWriteScreen> {
     });
   }
 
+  Future<bool> _isParticipant(String userId) async {
+    final host = await Supabase.instance.client
+        .from('gatherings')
+        .select('user_id')
+        .eq('id', widget.gatheringId)
+        .limit(1);
+    if (host.isNotEmpty) {
+      final hostId = (host.first['user_id'] ?? '').toString();
+      if (hostId == userId) return true;
+    }
+
+    final roomRows = await Supabase.instance.client
+        .from('chat_rooms')
+        .select('id')
+        .eq('gathering_id', widget.gatheringId)
+        .or('host_id.eq.$userId,guest_id.eq.$userId')
+        .limit(1);
+    if (roomRows.isNotEmpty) return true;
+
+    final groupRoom = await Supabase.instance.client
+        .from('group_chat_rooms')
+        .select('id')
+        .eq('gathering_id', widget.gatheringId)
+        .maybeSingle();
+    if (groupRoom == null) return false;
+
+    final roomId = (groupRoom['id'] ?? '').toString();
+    if (roomId.isEmpty) return false;
+
+    final msgRows = await Supabase.instance.client
+        .from('group_messages')
+        .select('id')
+        .eq('room_id', roomId)
+        .eq('user_id', userId)
+        .limit(1);
+    return msgRows.isNotEmpty;
+  }
+
   Future<void> _submitReview() async {
     if (_isSubmitting) return;
     final user = Supabase.instance.client.auth.currentUser;
@@ -101,6 +139,25 @@ class _ReviewWriteScreenState extends State<ReviewWriteScreen> {
       );
       return;
     }
+
+    try {
+      final reviewerParticipated = await _isParticipant(user.id);
+      final revieweeParticipated = await _isParticipant(widget.revieweeId);
+      if (!reviewerParticipated || !revieweeParticipated) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('내가 참여한 경기의 참가자만 평가할 수 있어요.')),
+        );
+        return;
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('참여 여부 확인 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.')),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
     try {
       final delta = _delta;
@@ -145,6 +202,24 @@ class _ReviewWriteScreenState extends State<ReviewWriteScreen> {
 
       if (!mounted) return;
       Navigator.pop(context, true);
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+      final missingReviewTable =
+          e.code == 'PGRST205' && e.message.contains("public.user_reviews");
+      final missingTempTable =
+          e.code == 'PGRST205' && e.message.contains("public.user_temperature");
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            (missingReviewTable || missingTempTable)
+                ? '평가 DB 테이블이 아직 생성되지 않았어요. Supabase SQL Editor에서 supabase_reviews.sql을 먼저 실행해주세요.'
+                : '후기 등록 실패: ${e.message}',
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
